@@ -1,6 +1,8 @@
 # livesplit-zdoom
 
-An auto splitter for Lzdoom.
+messing around with reflection in zdoom games
+
+tested with Dismantled, an LZDoom 3.82 game
 
 ## Compilation
 
