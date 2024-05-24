@@ -14,10 +14,17 @@ version = "0.1.0"
 source = "git+https://github.com/LiveSplit/asr#5eb46194eccb3ae81791eb9bfba70e85029abed3"
 dependencies = [
  "arrayvec",
+ "bitflags",
  "bytemuck",
  "time",
  "wasi",
 ]
+
+[[package]]
+name = "bitflags"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 
 [[package]]
 name = "bytemuck"

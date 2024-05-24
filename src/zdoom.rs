@@ -4,11 +4,16 @@ use asr::{print_message, string::ArrayCString, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 
 const NAME_ENTRY_SIZE: u64 = 0x10;
+
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
 const PFIELD_TYPE: u64 = 0x40;
+const PFIELD_FLAGS: u64 = 0x50;
 
-struct TArray<T: CheckedBitPattern> {
+const PCLASS_TYPENAME: u64 = 0x38;
+const PCLASS_DESCRIPTIVE_NAME: u64 = 0x88;
+
+pub struct TArray<T: CheckedBitPattern> {
     _phantom: PhantomData<T>,
     address: Address,
 }
@@ -34,7 +39,7 @@ impl<T: CheckedBitPattern> TArray<T> {
     }
 }
 
-struct TArrayIterator<'a, T: CheckedBitPattern> {
+pub struct TArrayIterator<'a, T: CheckedBitPattern> {
     _phantom: PhantomData<T>,
     process: &'a Process,
     address: Address,
@@ -128,10 +133,32 @@ impl PClass {
         PClass { address: addr }
     }
 
-    pub fn name(&self, process: &Process) -> Result<String, Error> {
+    pub fn name(&self, process: &Process, name_data: &NameManager) -> Result<String, Error> {
+        // let vm_type = PType {
+        //     address: process
+        //         .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x88])?
+        //         .into(),
+        // };
+
+        // return vm_type.name(process);
+        return name_data.get_chars(
+            process,
+            process.read_pointer_path::<u32>(
+                self.address,
+                asr::PointerSize::Bit64,
+                &[PCLASS_TYPENAME],
+            )?,
+        );
+    }
+
+    pub fn raw_name(&self, process: &Process) -> Result<String, Error> {
         let vm_type = PType {
             address: process
-                .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x88])?
+                .read_pointer_path::<u64>(
+                    self.address,
+                    asr::PointerSize::Bit64,
+                    &[PCLASS_DESCRIPTIVE_NAME],
+                )?
                 .into(),
         };
 
@@ -152,7 +179,7 @@ impl PClass {
             parent_class.debug_all_fields(process, name_data)?;
         }
 
-        asr::print_message(&format!("{} fields:", self.name(process)?));
+        asr::print_message(&format!("{} fields:", self.name(process, name_data)?));
 
         let fields_addr = self.address.add(0x78);
         // process.read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x78])?;
@@ -200,12 +227,13 @@ impl PField {
     }
 
     pub fn ptype(&self, process: &Process) -> Result<PType, Error> {
-        // PFIELD_TYPE
         let ptype: Address = process
             .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[PFIELD_TYPE])?
             .into();
         Ok(PType::new(ptype))
     }
+
+    // pub fn flags*&self, process: &Process) -> Result<
 }
 
 struct PType {

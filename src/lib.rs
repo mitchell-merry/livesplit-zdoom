@@ -5,7 +5,7 @@ mod zdoom;
 use std::error::Error;
 
 use asr::{deep_pointer::DeepPointer, future::next_tick, watcher::Watcher, Address, Process};
-use zdoom::{NameManager, PClass};
+use zdoom::{NameManager, PClass, TArray};
 
 asr::async_main!(nightly);
 
@@ -27,7 +27,7 @@ async fn main() {
                 let mut watchers = Watchers::default();
                 watchers.update(&process, &memory);
 
-                asr::print_message("a");
+                // asr::print_message("a");
                 let name_data = NameManager::new(
                     watchers
                         .name_manager_base
@@ -36,6 +36,20 @@ async fn main() {
                         .current,
                 );
 
+                // let all_classes = TArray::<u64>::new(
+                //     memory
+                //         .all_classes_ptr
+                //         .deref_offsets(&process)
+                //         .expect("wah?"),
+                // );
+
+                // for class in all_classes.into_iter(&process).expect("wah? 2") {
+                //     let pclass = PClass::new(class.into());
+                //     let typename = pclass.name(&process, &name_data).expect("wah? 3");
+                //     let name = pclass.raw_name(&process).expect("wah? 3");
+                //     asr::print_message(&format!("{typename} ({name})"));
+                // }
+
                 asr::print_message("a");
                 if let Some(pactor_class) = &watchers.player_actor_class.pair {
                     let class = PClass::new(pactor_class.current.into());
@@ -43,7 +57,7 @@ async fn main() {
                     class.debug_all_fields(&process, &name_data).expect("aaah");
                     asr::print_message("a");
 
-                    let name = class.name(&process);
+                    let name = class.name(&process, &name_data);
                     match name {
                         Ok(name) => {
                             asr::timer::set_variable("class", &name);
@@ -83,6 +97,7 @@ impl Watchers {
 struct Memory {
     namedata_ptr: DeepPointer<1>,
     player_actor_class_ptr: DeepPointer<3>,
+    all_classes_ptr: DeepPointer<1>,
 }
 
 impl Memory {
@@ -94,6 +109,7 @@ impl Memory {
                 asr::PointerSize::Bit64,
                 &[0x7043C0, 0x0, 0x8],
             ),
+            all_classes_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8980]),
         }
     }
 }
