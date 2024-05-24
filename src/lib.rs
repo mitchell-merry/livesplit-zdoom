@@ -5,7 +5,7 @@ mod zdoom;
 use std::error::Error;
 
 use asr::{deep_pointer::DeepPointer, future::next_tick, watcher::Watcher, Address, Process};
-use zdoom::{NameManager, PClass, TArray};
+use zdoom::{NameManager, PClass, PClassManager, TArray};
 
 asr::async_main!(nightly);
 
@@ -36,39 +36,36 @@ async fn main() {
                         .current,
                 );
 
-                // let all_classes = TArray::<u64>::new(
-                //     memory
-                //         .all_classes_ptr
-                //         .deref_offsets(&process)
-                //         .expect("wah?"),
-                // );
+                let all_classes_addr = memory
+                .all_classes_ptr
+                .deref_offsets(&process)
+                .expect("wah?");
 
-                // for class in all_classes.into_iter(&process).expect("wah? 2") {
-                //     let pclass = PClass::new(class.into());
-                //     let typename = pclass.name(&process, &name_data).expect("wah? 3");
-                //     let name = pclass.raw_name(&process).expect("wah? 3");
-                //     asr::print_message(&format!("{typename} ({name})"));
-                // }
+                let class_manager = PClassManager::load(&process, &name_data, all_classes_addr).expect("wah");
 
-                asr::print_message("a");
-                if let Some(pactor_class) = &watchers.player_actor_class.pair {
-                    let class = PClass::new(pactor_class.current.into());
-                    asr::print_message("a");
-                    class.debug_all_fields(&process, &name_data).expect("aaah");
-                    asr::print_message("a");
-
-                    let name = class.name(&process, &name_data);
-                    match name {
-                        Ok(name) => {
-                            asr::timer::set_variable("class", &name);
-                        }
-                        Err(error) => {
-                            asr::timer::set_variable("class", &format!("{:?}", error));
-                        }
-                    }
-                } else {
-                    asr::timer::set_variable("class", "unknown");
+                if let Some(inventory) = class_manager.find_class("Inventory") {
+                    inventory.debug_all_fields(&process, &name_data).expect("wah");
                 }
+
+                // asr::print_message("a");
+                // if let Some(pactor_class) = &watchers.player_actor_class.pair {
+                //     let class = PClass::new(pactor_class.current.into());
+                //     asr::print_message("a");
+                //     class.debug_all_fields(&process, &name_data).expect("aaah");
+                //     asr::print_message("a");
+
+                //     let name = class.name(&process, &name_data);
+                //     match name {
+                //         Ok(name) => {
+                //             asr::timer::set_variable("class", &name);
+                //         }
+                //         Err(error) => {
+                //             asr::timer::set_variable("class", &format!("{:?}", error));
+                //         }
+                //     }
+                // } else {
+                //     asr::timer::set_variable("class", "unknown");
+                // }
 
                 // TODO: Load some initial information from the process.
                 loop {

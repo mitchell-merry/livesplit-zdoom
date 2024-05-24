@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, mem, ops::Add, process};
+use std::{collections::HashMap, marker::PhantomData, mem, ops::Add, process};
 
 use asr::{print_message, string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
@@ -13,6 +13,7 @@ const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
 const PCLASS_DESCRIPTIVE_NAME: u64 = 0x88;
+
 
 pub struct TArray<T: CheckedBitPattern> {
     _phantom: PhantomData<T>,
@@ -125,6 +126,8 @@ impl NameManager {
     }
 }
 
+
+
 pub struct PClass {
     address: Address,
 }
@@ -209,6 +212,33 @@ impl PClass {
         }
 
         Ok(())
+    }
+}
+
+pub struct PClassManager {
+    classes: HashMap<String, PClass>,
+}
+
+impl PClassManager {
+    pub fn load(process: &Process, name_data: &NameManager, address: Address) -> Result<Self, Error> {
+        let mut classes: HashMap<String, PClass> = HashMap::new();
+
+        let all_classes = TArray::<u64>::new(address);
+
+        for class in all_classes.into_iter(&process)? {
+            let pclass = PClass::new(class.into());
+            let name = pclass.name(&process, &name_data)?;
+            
+            classes.insert(name, pclass);
+        }
+
+        Ok(PClassManager {
+            classes
+        })
+    }
+
+    pub fn find_class(&self, name: &str) -> Option<&PClass> {
+        self.classes.get(name)
     }
 }
 
