@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, mem, ops::Add, process};
 
 use asr::{print_message, string::ArrayCString, Address, Error, Process};
+use bitflags::bitflags;
 use bytemuck::CheckedBitPattern;
 
 const NAME_ENTRY_SIZE: u64 = 0x10;
@@ -8,7 +9,7 @@ const NAME_ENTRY_SIZE: u64 = 0x10;
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
 const PFIELD_TYPE: u64 = 0x40;
-const PFIELD_FLAGS: u64 = 0x50;
+const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
 const PCLASS_DESCRIPTIVE_NAME: u64 = 0x88;
@@ -191,16 +192,53 @@ impl PClass {
             // asr::print_message(&format!("field_addr {:X}", field_addr));
             let field = PField::new(field_addr.into());
             // asr::print_message("a");
+            let flags =             field.flags(process)?;
+            let is_static = match flags.contains(PFieldFlags::VARF_Static) {
+                true => " static",
+                false => "       ",
+            };
+
             asr::print_message(&format!(
-                "  => 0x{:X}  {}: {} [{:X}]",
+                "  => {is_static} 0x{:X}  {}: {} [{:?}]",
                 field.offset(process)?,
                 field.name(process, name_data)?,
                 field.ptype(process)?.name(process)?,
-                field_addr
+                flags
+                // field_addr
             ));
         }
 
         Ok(())
+    }
+}
+
+bitflags! {
+    #[derive(Debug, PartialEq)]
+    struct PFieldFlags: u32 {
+        const VARF_Optional = 1 << 0;        // func param is optional
+        const VARF_Method = 1 << 1;          // func has an implied self parameter
+        const VARF_Action = 1 << 2;          // func has implied owner and state parameters
+        const VARF_Native = 1 << 3;	         // func is native code, field is natively defined
+        const VARF_ReadOnly = 1 << 4;        // field is read only, do not write to it
+        const VARF_Private = 1 << 5;         // field is private to containing class
+        const VARF_Protected = 1 << 6;       // field is only accessible by containing class and children.
+        const VARF_Deprecated = 1 << 7;	     // Deprecated fields should output warnings when used.
+        const VARF_Virtual = 1 << 8;	     // function is virtual
+        const VARF_Final = 1 << 9;	         // Function may not be overridden in subclasses
+        const VARF_In = 1 << 10;
+        const VARF_Out = 1 << 11;
+        const VARF_Implicit = 1 << 12;	     // implicitly created parameters (i.e. do not compare types when checking function signatures)
+        const VARF_Static = 1 << 13;
+        const VARF_InternalAccess = 1 << 14; // overrides VARF_ReadOnly for internal script code.
+        const VARF_Override = 1 << 15;	     // overrides a virtual function from the parent class.
+        const VARF_Ref = 1 << 16;	         // argument is passed by reference.
+        const VARF_Transient = 1 << 17;      // don't auto serialize field.
+        const VARF_Meta = 1 << 18;	         // static class data (by necessity read only.)
+        const VARF_VarArg = 1 << 19;         // [ZZ] vararg: don't typecheck values after ... in function signature
+        const VARF_UI = 1 << 20;             // [ZZ] ui: object is ui-scope only (can't modify playsim)
+        const VARF_Play = 1 << 21;           // [ZZ] play: object is playsim-scope only (can't access ui)
+        const VARF_VirtualScope	= 1 << 22;   // [ZZ] virtualscope: object should use the scope of the particular class it's being used with (methods only)
+        const VARF_ClearScope = 1 << 23;     // [ZZ] clearscope: this method ignores the member access chain that leads to it and is always plain data.
     }
 }
 
@@ -233,7 +271,12 @@ impl PField {
         Ok(PType::new(ptype))
     }
 
-    // pub fn flags*&self, process: &Process) -> Result<
+    pub fn flags(&self, process: &Process) -> Result<PFieldFlags, Error> {
+        
+        Ok(PFieldFlags::from_bits_truncate(process
+        .read_pointer_path::<u32>(self.address, asr::PointerSize::Bit64, &[PFIELD_FLAGS])?
+        ))
+    }
 }
 
 struct PType {

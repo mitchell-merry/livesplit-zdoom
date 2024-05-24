@@ -14,7 +14,6 @@ version = "0.1.0"
 source = "git+https://github.com/LiveSplit/asr#5eb46194eccb3ae81791eb9bfba70e85029abed3"
 dependencies = [
  "arrayvec",
- "bitflags",
  "bytemuck",
  "time",
  "wasi",
@@ -60,6 +59,7 @@ name = "livesplit-zdoom"
 version = "0.1.0"
 dependencies = [
  "asr",
+ "bitflags",
  "bytemuck",
 ]
 
