@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, mem, ops::Add, process};
+use std::{collections::HashMap, fmt::Display, marker::PhantomData, mem, ops::Add, process};
 
 use asr::{print_message, string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
@@ -240,6 +240,16 @@ impl PClassManager {
     pub fn find_class(&self, name: &str) -> Option<&PClass> {
         self.classes.get(name)
     }
+
+    pub fn show_all_classes(&self, process: &Process) {
+        for (name, class) in self.classes.iter() {
+            asr::print_message(name);
+        }
+    }
+
+    pub fn dump(&self, process: &Process) {
+
+    }
 }
 
 bitflags! {
@@ -306,6 +316,12 @@ impl PField {
         Ok(PFieldFlags::from_bits_truncate(process
         .read_pointer_path::<u32>(self.address, asr::PointerSize::Bit64, &[PFIELD_FLAGS])?
         ))
+    }
+}
+
+impl Display for PField {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
     }
 }
 
