@@ -14,7 +14,6 @@ async fn main() {
 
     asr::print_message("Hello, World!");
 
-
     loop {
         let process = Process::wait_attach("lzdoom.exe").await;
         process
@@ -30,6 +29,7 @@ async fn main() {
 
                 // asr::print_message("a");
                 let name_data = NameManager::new(
+                    &process,
                     watchers
                         .name_manager_base
                         .pair
@@ -38,13 +38,14 @@ async fn main() {
                 );
 
                 let all_classes_addr = memory
-                .all_classes_ptr
-                .deref_offsets(&process)
-                .expect("wah?");
+                    .all_classes_ptr
+                    .deref_offsets(&process)
+                    .expect("wah?");
 
-                let class_manager = PClassManager::load(&process, &name_data, all_classes_addr).expect("wah");
+                let class_manager =
+                    PClassManager::load(&process, &name_data, all_classes_addr).expect("wah");
 
-                class_manager.dump(&process);
+                class_manager.dump();
 
                 // if let Some(inventory) = class_manager.find_class("Inventory") {
                 //     inventory.debug_all_fields(&process, &name_data).expect("wah");
