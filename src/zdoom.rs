@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display, marker::PhantomData, mem, ops::Add, process};
+use std::{
+    collections::HashMap, fmt::Display, fs::File, io::Write, marker::PhantomData, mem, ops::Add,
+    path::Path, process,
+};
 
 use asr::{print_message, string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
@@ -86,15 +89,7 @@ impl<'a> NameManager<'a> {
             self.address,
             asr::PointerSize::Bit64,
             &[0x8, index as u64 * NAME_ENTRY_SIZE, 0x0],
-        );
-
-        let read = match read {
-            Ok(cstr) => cstr,
-            Err(e) => {
-                asr::print_message(&format!("what? a{e:?}"));
-                panic!("waaaah..");
-            }
-        };
+        )?;
 
         match read.validate_utf8() {
             Ok(s) => Ok(s.to_owned()),
@@ -223,7 +218,27 @@ impl<'a> PClassManager<'a> {
         }
     }
 
-    pub fn dump(&self) {}
+    pub fn dump(&self) {
+        let dump_file_path = Path::new("lzdoom.txt");
+
+        let display = dump_file_path.display();
+        asr::print_message(&format!("display {display}"));
+
+        // Open a file in write-only mode, returns `io::Result<File>`
+        let mut file = match File::create(&dump_file_path) {
+            Err(why) => {
+                asr::print_message(&format!("couldn't create {}: {}", display, why));
+                panic!("aaah")
+            }
+            Ok(file) => file,
+        };
+
+        // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
+        match file.write_all("LOREM_IPSUM".as_bytes()) {
+            Err(why) => panic!("couldn't write to {}: {}", display, why),
+            Ok(_) => println!("successfully wrote to {}", display),
+        }
+    }
 }
 
 bitflags! {
