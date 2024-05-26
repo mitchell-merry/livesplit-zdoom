@@ -3,7 +3,7 @@
 mod zdoom;
 
 use asr::{deep_pointer::DeepPointer, future::next_tick, watcher::Watcher, Address, Process};
-use zdoom::ZDoom;
+use zdoom::{ZDoom, ZDoomVersion};
 
 asr::async_main!(nightly);
 
@@ -13,14 +13,17 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach("lzdoom.exe").await;
+        let process = Process::wait_attach("gzdoom.exe").await;
         process
             .until_closes(async {
                 // let mut watchers = Watchers::default();
                 // watchers.update(&process, &memory);
-
-                let zdoom = ZDoom::load(&process).expect("failed loading zdoom");
+                
+                let zdoom = ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading doom");
                 zdoom.show_all_classes();
+                if let Some(class) = zdoom.find_class("SnapPlayer") {
+                    class.debug_all_fields(&zdoom.name_data).expect("bwa");
+                }
 
                 // if let Some(inventory) = class_manager.find_class("Inventory") {
                 //     inventory.debug_all_fields(&process, &name_data).expect("wah");

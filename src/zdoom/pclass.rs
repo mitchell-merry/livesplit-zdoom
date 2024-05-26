@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
 
-use super::{name_manager::{self, NameManager}, tarray::TArray};
+use super::{
+    name_manager::{self, NameManager},
+    tarray::TArray,
+};
 
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
@@ -27,12 +30,11 @@ impl<'a> PClass<'a> {
     }
 
     pub fn name(&self, name_manager: &NameManager) -> Result<String, Error> {
-        return name_manager
-            .get_chars(self.process.read_pointer_path::<u32>(
-                self.address,
-                asr::PointerSize::Bit64,
-                &[PCLASS_TYPENAME],
-            )?);
+        return name_manager.get_chars(self.process.read_pointer_path::<u32>(
+            self.address,
+            asr::PointerSize::Bit64,
+            &[PCLASS_TYPENAME],
+        )?);
     }
 
     pub fn raw_name(&self, process: &Process) -> Result<String, Error> {
@@ -49,6 +51,39 @@ impl<'a> PClass<'a> {
 
         return vm_type.name();
     }
+
+    // pub fn show_class(&self, name_manager: &NameManager) -> Result<(), Error> {
+    //     let mut struct_out = String::new();
+
+    //     let parent_class: Address = self
+    //         .process
+    //         .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x0])?
+    //         .into();
+
+    //     struct_out.push_str(&format!("class {} ", self.name(name_manager)?));
+
+    //     if parent_class != Address::NULL {
+    //         let parent_class = PClass::new(self.process, parent_class);
+    //         struct_out.push_str(&format!(": public {} ", parent_class.name(name_manager)?));
+    //     }
+
+    //     struct_out.push_str("{\n");
+
+    //     let fields_addr = self.address.add(0x78);
+    //     let field_addrs = TArray::<u64>::new(self.process, fields_addr.into());
+
+    //     let mut fields = Vec::<PField>::new();
+
+    //     for field_addr in field_addrs.into_iter()? {
+    //         let field = PField::new(&self.process, field_addr.into());
+    //     }
+
+    //     fields.sort();
+
+    //     struct_out.push('}');
+
+    //     Ok(())
+    // }
 
     pub fn debug_all_fields(&self, name_manager: &NameManager) -> Result<(), Error> {
         let parent_class: Address = self
@@ -124,10 +159,7 @@ struct PField<'a> {
 
 impl<'a> PField<'a> {
     pub fn new(process: &'a Process, address: Address) -> PField<'a> {
-        PField {
-            process,
-            address,
-        }
+        PField { process, address }
     }
 
     pub fn name(&self, name_manager: &NameManager) -> Result<String, Error> {

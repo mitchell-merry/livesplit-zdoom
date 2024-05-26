@@ -10,14 +10,13 @@ pub mod tarray;
 
 pub struct ZDoom<'a> {
     process: &'a Process,
-    name_data: NameManager<'a>,
+    pub name_data: NameManager<'a>,
     classes: HashMap<String, PClass<'a>>,
 }
 
 impl<'a> ZDoom<'a> {
-    pub fn load(process: &'a Process) -> Result<ZDoom<'a>, Error> {
-        let main_exe_addr = process.get_module_address("lzdoom.exe")?;
-        let memory = Memory::new(main_exe_addr);
+    pub fn load(process: &'a Process, version: ZDoomVersion) -> Result<ZDoom<'a>, Error> {
+        let memory = Memory::new(process, version)?;
 
         let name_data = NameManager::new(&process, memory.namedata_ptr.deref_offsets(process)?);
 
@@ -50,22 +49,59 @@ impl<'a> ZDoom<'a> {
     }
 }
 
+// disclaimer: I don't know much about the different zdoom versions work...
+// i have only tried this with two games
+#[derive(Clone, Copy)]
+pub enum ZDoomVersion {
+    Lzdoom3_82,  // Dismantled: Director's Cut
+    Gzdoom4_8_2, // Snap the Sentinel
+}
+
 struct Memory {
     namedata_ptr: DeepPointer<1>,
-    player_actor_class_ptr: DeepPointer<3>,
+    // player_actor_class_ptr: DeepPointer<3>,
     all_classes_ptr: DeepPointer<1>,
 }
 
 impl Memory {
-    fn new(main_exe_addr: Address) -> Memory {
-        Memory {
-            namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
-            player_actor_class_ptr: DeepPointer::new(
-                main_exe_addr,
-                asr::PointerSize::Bit64,
-                &[0x7043C0, 0x0, 0x8],
-            ),
-            all_classes_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8980]),
+    fn new(process: &Process, version: ZDoomVersion) -> Result<Memory, Error> {
+        let main_module_name = Memory::get_main_module_name(version);
+        let main_exe_addr = process.get_module_address(main_module_name)?;
+
+        match version {
+            ZDoomVersion::Lzdoom3_82 => Ok(Memory {
+                namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
+                // player_actor_class_ptr: DeepPointer::new(
+                //     main_exe_addr,
+                //     asr::PointerSize::Bit64,
+                //     &[0x7043C0, 0x0, 0x8],
+                // ),
+                all_classes_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x9F8980],
+                ),
+            }),
+            ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
+                namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x11880A0]),
+                // player_actor_class_ptr: DeepPointer::new(
+                //     main_exe_addr,
+                //     asr::PointerSize::Bit64,
+                //     &[0x6FDBD0, 0x0, 0x8],
+                // ),
+                all_classes_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x11147C0],
+                ),
+            }),
+        }
+    }
+
+    fn get_main_module_name(version: ZDoomVersion) -> &'static str {
+        match version {
+            ZDoomVersion::Lzdoom3_82 => "lzdoom.exe",
+            ZDoomVersion::Gzdoom4_8_2 => "gzdoom.exe",
         }
     }
 }
