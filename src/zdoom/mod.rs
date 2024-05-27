@@ -2,16 +2,21 @@ use std::collections::HashMap;
 
 use asr::{deep_pointer::DeepPointer, Address, Error, Process};
 
-use self::{name_manager::NameManager, pclass::PClass, tarray::TArray};
+use self::{level::Level, name_manager::NameManager, pclass::PClass, player::Player, tarray::TArray};
 
+pub mod level;
 pub mod name_manager;
 pub mod pclass;
+pub mod player;
 pub mod tarray;
 
 pub struct ZDoom<'a> {
     process: &'a Process,
+    memory: Memory,
     pub name_data: NameManager<'a>,
     classes: HashMap<String, PClass<'a>>,
+    pub level: Level<'a>, 
+    pub player: Player<'a>,
 }
 
 impl<'a> ZDoom<'a> {
@@ -19,6 +24,8 @@ impl<'a> ZDoom<'a> {
         let memory = Memory::new(process, version)?;
 
         let name_data = NameManager::new(&process, memory.namedata_ptr.deref_offsets(process)?);
+        let level = Level::new(&process, memory.level_ptr.deref_offsets(process)?);
+        let player = Player::new(&process, memory.player_ptr.deref::<u64>(process)?.into());
 
         let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
         let all_classes =
@@ -33,9 +40,19 @@ impl<'a> ZDoom<'a> {
 
         Ok(ZDoom {
             process,
+            memory,
             name_data,
             classes,
+            level,
+            player,
         })
+    }
+
+    pub fn invalidate_cache(&mut self) -> Result<(), Error> {
+        self.level.invalidate_cache();
+        self.player = Player::new(self.process, self.memory.player_ptr.deref::<u64>(self.process)?.into());
+
+        Ok(())
     }
 
     pub fn find_class(&self, name: &str) -> Option<&PClass> {
@@ -58,9 +75,11 @@ pub enum ZDoomVersion {
 }
 
 struct Memory {
+    // yes these should be signatures. TODO
     namedata_ptr: DeepPointer<1>,
-    // player_actor_class_ptr: DeepPointer<3>,
+    player_ptr: DeepPointer<2>,
     all_classes_ptr: DeepPointer<1>,
+    level_ptr: DeepPointer<1>,
 }
 
 impl Memory {
@@ -71,29 +90,27 @@ impl Memory {
         match version {
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
-                // player_actor_class_ptr: DeepPointer::new(
-                //     main_exe_addr,
-                //     asr::PointerSize::Bit64,
-                //     &[0x7043C0, 0x0, 0x8],
-                // ),
+                player_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x7043C0, 0x0]),
                 all_classes_ptr: DeepPointer::new(
                     main_exe_addr,
                     asr::PointerSize::Bit64,
                     &[0x9F8980],
                 ),
+                level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F5B78]),
             }),
             ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
-                namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x11880A0]),
-                // player_actor_class_ptr: DeepPointer::new(
-                //     main_exe_addr,
-                //     asr::PointerSize::Bit64,
-                //     &[0x6FDBD0, 0x0, 0x8],
-                // ),
+                namedata_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x11880A0],
+                ),
+                player_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x6FDBD0, 0x0]),
                 all_classes_ptr: DeepPointer::new(
                     main_exe_addr,
                     asr::PointerSize::Bit64,
                     &[0x11147C0],
                 ),
+                level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x10FD9B0]),
             }),
         }
     }

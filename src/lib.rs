@@ -9,6 +9,9 @@ asr::async_main!(nightly);
 
 async fn main() {
     // TODO: Set up some general state and settings.
+    std::panic::set_hook(Box::new(|panic_info| {
+        asr::print_message(&panic_info.to_string());
+    }));
 
     asr::print_message("Hello, World!");
 
@@ -18,41 +21,32 @@ async fn main() {
             .until_closes(async {
                 // let mut watchers = Watchers::default();
                 // watchers.update(&process, &memory);
-                
-                let zdoom = ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading doom");
-                zdoom.show_all_classes();
-                if let Some(class) = zdoom.find_class("SnapPlayer") {
-                    class.debug_all_fields(&zdoom.name_data).expect("bwa");
-                }
 
-                // if let Some(inventory) = class_manager.find_class("Inventory") {
-                //     inventory.debug_all_fields(&process, &name_data).expect("wah");
+                let mut zdoom = ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
+                // let mut zdoom =
+                //     ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("failed loading zdoom");
+
+                // zdoom.show_all_classes();
+                // if let Some(class) = zdoom.find_class("SnapPlayer") {
+                //     class.debug_all_fields(&zdoom.name_data).expect("bwa");
                 // }
 
-                // class_manager.show_all_classes(&process);
-
-                // asr::print_message("a");
-                // if let Some(pactor_class) = &watchers.player_actor_class.pair {
-                //     let class = PClass::new(pactor_class.current.into());
-                //     asr::print_message("a");
-                //     class.debug_all_fields(&process, &name_data).expect("aaah");
-                //     asr::print_message("a");
-
-                //     let name = class.name(&process, &name_data);
-                //     match name {
-                //         Ok(name) => {
-                //             asr::timer::set_variable("class", &name);
-                //         }
-                //         Err(error) => {
-                //             asr::timer::set_variable("class", &format!("{:?}", error));
-                //         }
-                //     }
-                // } else {
-                //     asr::timer::set_variable("class", "unknown");
-                // }
-
-                // TODO: Load some initial information from the process.
                 loop {
+                    let name = zdoom.level.name();
+                    if let Ok(name) = name {
+                        asr::timer::set_variable("map", name);
+                    } else {
+                        asr::timer::set_variable("map", "failed reading map!");
+                    }
+
+                    let pos = zdoom.player.pos();
+                    if let Ok(pos) = pos {
+                        asr::timer::set_variable("pos", &format!("{pos:?}"));
+                    } else {
+                        asr::timer::set_variable("pos", "failed reading pos!");
+                    }
+
+                    zdoom.invalidate_cache().expect("ah");
                     next_tick().await;
                 }
             })
