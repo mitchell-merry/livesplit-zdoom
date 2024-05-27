@@ -48,7 +48,7 @@ impl<'a> Player<'a> {
 
         let pos = DVector3::read(self.process, self.address + PLAYER_POS_OFFSET)?;
         self._pos = Some(pos.clone());
- 
+
         return Ok(self._pos.as_ref().unwrap());
     }
 }

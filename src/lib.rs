@@ -22,7 +22,8 @@ async fn main() {
                 // let mut watchers = Watchers::default();
                 // watchers.update(&process, &memory);
 
-                let mut zdoom = ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
+                let mut zdoom =
+                    ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
                 // let mut zdoom =
                 //     ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("failed loading zdoom");
 

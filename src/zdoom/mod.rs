@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use asr::{deep_pointer::DeepPointer, Address, Error, Process};
 
-use self::{level::Level, name_manager::NameManager, pclass::PClass, player::Player, tarray::TArray};
+use self::{
+    level::Level, name_manager::NameManager, pclass::PClass, player::Player, tarray::TArray,
+};
 
 pub mod level;
 pub mod name_manager;
@@ -15,7 +17,7 @@ pub struct ZDoom<'a> {
     memory: Memory,
     pub name_data: NameManager<'a>,
     classes: HashMap<String, PClass<'a>>,
-    pub level: Level<'a>, 
+    pub level: Level<'a>,
     pub player: Player<'a>,
 }
 
@@ -50,7 +52,10 @@ impl<'a> ZDoom<'a> {
 
     pub fn invalidate_cache(&mut self) -> Result<(), Error> {
         self.level.invalidate_cache();
-        self.player = Player::new(self.process, self.memory.player_ptr.deref::<u64>(self.process)?.into());
+        self.player = Player::new(
+            self.process,
+            self.memory.player_ptr.deref::<u64>(self.process)?.into(),
+        );
 
         Ok(())
     }
@@ -90,7 +95,11 @@ impl Memory {
         match version {
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
-                player_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x7043C0, 0x0]),
+                player_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x7043C0, 0x0],
+                ),
                 all_classes_ptr: DeepPointer::new(
                     main_exe_addr,
                     asr::PointerSize::Bit64,
@@ -104,7 +113,11 @@ impl Memory {
                     asr::PointerSize::Bit64,
                     &[0x11880A0],
                 ),
-                player_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x6FDBD0, 0x0]),
+                player_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x6FDBD0, 0x0],
+                ),
                 all_classes_ptr: DeepPointer::new(
                     main_exe_addr,
                     asr::PointerSize::Bit64,
