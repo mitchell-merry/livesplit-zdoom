@@ -16,16 +16,16 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach("gzdoom.exe").await;
+        let process = Process::wait_attach("lzdoom.exe").await;
         process
             .until_closes(async {
                 // let mut watchers = Watchers::default();
                 // watchers.update(&process, &memory);
 
+                // let mut zdoom = 
+                //     ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
                 let mut zdoom =
-                    ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
-                // let mut zdoom =
-                //     ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("failed loading zdoom");
+                    ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("failed loading zdoom");
 
                 // zdoom.show_all_classes();
                 // if let Some(class) = zdoom.find_class("SnapPlayer") {
@@ -45,6 +45,13 @@ async fn main() {
                         asr::timer::set_variable("pos", &format!("{pos:?}"));
                     } else {
                         asr::timer::set_variable("pos", "failed reading pos!");
+                    }
+
+                    let gameaction = zdoom.gameaction();
+                    if let Ok(gameaction) = gameaction {
+                        asr::timer::set_variable("gameaction", &format!("{gameaction:?}"));
+                    } else {
+                        asr::timer::set_variable("gameaction", "failed reading gameaction!");
                     }
 
                     zdoom.invalidate_cache().expect("ah");

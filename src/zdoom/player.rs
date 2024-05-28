@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use asr::{Address, Error, Process};
 
-// const PLAYER_POS_OFFSET: u32 = 0x48;
-const PLAYER_POS_OFFSET: u32 = 0x50;
+const PLAYER_POS_OFFSET: u32 = 0x48;
+// const PLAYER_POS_OFFSET: u32 = 0x50;
 
 #[derive(Clone, Debug)]
 pub struct DVector3 {

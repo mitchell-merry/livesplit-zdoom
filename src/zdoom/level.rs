@@ -1,7 +1,7 @@
 use asr::{string::ArrayCString, Address, Error, Process};
 
-// const LEVEL_MAPNAME_OFFSET: u64 = 0x2C8;
-const LEVEL_MAPNAME_OFFSET: u64 = 0x9D8;
+const LEVEL_MAPNAME_OFFSET: u64 = 0x2C8;
+// const LEVEL_MAPNAME_OFFSET: u64 = 0x9D8;
 
 pub struct Level<'a> {
     process: &'a Process,

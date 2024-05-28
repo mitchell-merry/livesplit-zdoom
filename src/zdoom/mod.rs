@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use asr::{deep_pointer::DeepPointer, Address, Error, Process};
+use bytemuck::CheckedBitPattern;
 
 use self::{
     level::Level, name_manager::NameManager, pclass::PClass, player::Player, tarray::TArray,
@@ -19,6 +20,7 @@ pub struct ZDoom<'a> {
     classes: HashMap<String, PClass<'a>>,
     pub level: Level<'a>,
     pub player: Player<'a>,
+    pub gameaction: Option<GameAction>,
 }
 
 impl<'a> ZDoom<'a> {
@@ -47,6 +49,7 @@ impl<'a> ZDoom<'a> {
             classes,
             level,
             player,
+            gameaction: None,
         })
     }
 
@@ -56,6 +59,7 @@ impl<'a> ZDoom<'a> {
             self.process,
             self.memory.player_ptr.deref::<u64>(self.process)?.into(),
         );
+        self.gameaction = None;
 
         Ok(())
     }
@@ -68,6 +72,17 @@ impl<'a> ZDoom<'a> {
         for (name, _class) in self.classes.iter() {
             asr::print_message(name);
         }
+    }
+
+    pub fn gameaction(&mut self) -> Result<GameAction, Error> {
+        if let Some(gameaction) = self.gameaction {
+            return Ok(gameaction);
+        }
+
+        let gameaction = self.memory.gameaction_ptr.deref(self.process)?;
+
+        self.gameaction = Some(gameaction);
+        return Ok(gameaction);
     }
 }
 
@@ -85,6 +100,7 @@ struct Memory {
     player_ptr: DeepPointer<2>,
     all_classes_ptr: DeepPointer<1>,
     level_ptr: DeepPointer<1>,
+    gameaction_ptr: DeepPointer<2>,
 }
 
 impl Memory {
@@ -106,6 +122,7 @@ impl Memory {
                     &[0x9F8980],
                 ),
                 level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F5B78]),
+                gameaction_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x7044E0, 0])
             }),
             ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(
@@ -124,6 +141,7 @@ impl Memory {
                     &[0x11147C0],
                 ),
                 level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x10FD9B0]),
+                gameaction_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x6FDCF0, 0]),
             }),
         }
     }
@@ -134,4 +152,31 @@ impl Memory {
             ZDoomVersion::Gzdoom4_8_2 => "gzdoom.exe",
         }
     }
+}
+
+#[derive(CheckedBitPattern, Clone, Copy, Debug, PartialEq)]
+#[repr(u32)]
+pub enum GameAction {
+	Nothing,
+	LoadLevel, // not used.
+	NewGame,
+	NewGame2,
+	RecordGame,
+	LoadGame,
+	LoadGameHideCon,
+	LoadGamePlayDemo,
+	AutoLoadGame,
+	SaveGame,
+	AutoSave,
+	PlayDemo,
+	Completed,
+	Slideshow,
+	WorldDone,
+	Screenshot,
+	ToggleMap,
+	FullConsole,
+	ResumeConversation,
+	Intro,
+	Intermission,
+	TitleLoop,
 }
