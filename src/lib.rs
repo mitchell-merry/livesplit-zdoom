@@ -15,7 +15,7 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach("lzdoom.exe").await;
+        let process = Process::wait_attach(" lzdoom.exe").await;
         process
             .until_closes(async {
                 on_attach(&process).await.expect("problem");
@@ -54,6 +54,30 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
                 }
             }
         }
+        
+        // this is logic specific to Snap the Sentinel
+        // if let Some(ref level_name) = watchers.level.pair
+        //     && let Some(ref player_pos) = watchers.player_pos.pair
+        //     && let Some(ref gameaction) = watchers.gameaction.pair
+        // {
+        //     if timer::state() == timer::TimerState::NotRunning {
+        //         if level_name.current == "E1M1"
+        //             && player_pos.current.x == 64.0
+        //             && player_pos.current.y == -848.0
+        //             && gameaction.old == GameAction::NewGame
+        //             && gameaction.current == GameAction::Nothing
+        //         {
+        //             timer::start();
+        //         }
+        //     }
+
+        //     if timer::state() == timer::TimerState::Running {
+        //         match gameaction.current {
+        //             GameAction::WorldDone => timer::pause_game_time(),
+        //             _ => timer::resume_game_time(),
+        //         }
+        //     }
+        // }
 
         next_tick().await;
     }
