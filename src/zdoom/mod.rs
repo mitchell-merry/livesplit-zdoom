@@ -122,7 +122,11 @@ impl Memory {
                     &[0x9F8980],
                 ),
                 level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F5B78]),
-                gameaction_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x7044E0, 0])
+                gameaction_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x7044E0, 0],
+                ),
             }),
             ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(
@@ -141,7 +145,11 @@ impl Memory {
                     &[0x11147C0],
                 ),
                 level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x10FD9B0]),
-                gameaction_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x6FDCF0, 0]),
+                gameaction_ptr: DeepPointer::new(
+                    main_exe_addr,
+                    asr::PointerSize::Bit64,
+                    &[0x6FDCF0, 0],
+                ),
             }),
         }
     }
@@ -157,26 +165,26 @@ impl Memory {
 #[derive(CheckedBitPattern, Clone, Copy, Debug, PartialEq)]
 #[repr(u32)]
 pub enum GameAction {
-	Nothing,
-	LoadLevel, // not used.
-	NewGame,
-	NewGame2,
-	RecordGame,
-	LoadGame,
-	LoadGameHideCon,
-	LoadGamePlayDemo,
-	AutoLoadGame,
-	SaveGame,
-	AutoSave,
-	PlayDemo,
-	Completed,
-	Slideshow,
-	WorldDone,
-	Screenshot,
-	ToggleMap,
-	FullConsole,
-	ResumeConversation,
-	Intro,
-	Intermission,
-	TitleLoop,
+    Nothing,
+    LoadLevel, // not used.
+    NewGame,
+    NewGame2,
+    RecordGame,
+    LoadGame,
+    LoadGameHideCon,
+    LoadGamePlayDemo,
+    AutoLoadGame,
+    SaveGame,
+    AutoSave,
+    PlayDemo,
+    Completed,
+    Slideshow,
+    WorldDone,
+    Screenshot,
+    ToggleMap,
+    FullConsole,
+    ResumeConversation,
+    Intro,
+    Intermission,
+    TitleLoop,
 }

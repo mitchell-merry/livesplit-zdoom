@@ -5,7 +5,7 @@ use asr::{Address, Error, Process};
 const PLAYER_POS_OFFSET: u32 = 0x48;
 // const PLAYER_POS_OFFSET: u32 = 0x50;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DVector3 {
     pub x: f64,
     pub y: f64,

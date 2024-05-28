@@ -12,7 +12,8 @@
                 "--debug",
                 "target${pathSeparator}wasm32-unknown-unknown${pathSeparator}debug${pathSeparator}livesplit_zdoom.wasm"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": ["rust"]
         }
     ]
 }

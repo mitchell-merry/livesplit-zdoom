@@ -1,14 +1,13 @@
-#![feature(type_alias_impl_trait, const_async_blocks)]
+#![feature(type_alias_impl_trait, const_async_blocks, let_chains)]
 
 mod zdoom;
 
-use asr::{deep_pointer::DeepPointer, future::next_tick, watcher::Watcher, Address, Process};
-use zdoom::{ZDoom, ZDoomVersion};
+use asr::{future::next_tick, time::Duration, timer, watcher::Watcher, Error, Process};
+use zdoom::{player::DVector3, GameAction, ZDoom, ZDoomVersion};
 
 asr::async_main!(nightly);
 
 async fn main() {
-    // TODO: Set up some general state and settings.
     std::panic::set_hook(Box::new(|panic_info| {
         asr::print_message(&panic_info.to_string());
     }));
@@ -19,60 +18,78 @@ async fn main() {
         let process = Process::wait_attach("lzdoom.exe").await;
         process
             .until_closes(async {
-                // let mut watchers = Watchers::default();
-                // watchers.update(&process, &memory);
-
-                // let mut zdoom = 
-                //     ZDoom::load(&process, ZDoomVersion::Gzdoom4_8_2).expect("failed loading zdoom");
-                let mut zdoom =
-                    ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("failed loading zdoom");
-
-                // zdoom.show_all_classes();
-                // if let Some(class) = zdoom.find_class("SnapPlayer") {
-                //     class.debug_all_fields(&zdoom.name_data).expect("bwa");
-                // }
-
-                loop {
-                    let name = zdoom.level.name();
-                    if let Ok(name) = name {
-                        asr::timer::set_variable("map", name);
-                    } else {
-                        asr::timer::set_variable("map", "failed reading map!");
-                    }
-
-                    let pos = zdoom.player.pos();
-                    if let Ok(pos) = pos {
-                        asr::timer::set_variable("pos", &format!("{pos:?}"));
-                    } else {
-                        asr::timer::set_variable("pos", "failed reading pos!");
-                    }
-
-                    let gameaction = zdoom.gameaction();
-                    if let Ok(gameaction) = gameaction {
-                        asr::timer::set_variable("gameaction", &format!("{gameaction:?}"));
-                    } else {
-                        asr::timer::set_variable("gameaction", "failed reading gameaction!");
-                    }
-
-                    zdoom.invalidate_cache().expect("ah");
-                    next_tick().await;
-                }
+                on_attach(&process).await.expect("problem");
             })
             .await;
     }
 }
 
-// #[derive(Default)]
-// struct Watchers {
-//     name_manager_base: Watcher<Address>,
-//     player_actor_class: Watcher<u64>,
-// }
+async fn on_attach(process: &Process) -> Result<(), Error> {
+    let mut zdoom = ZDoom::load(&process, ZDoomVersion::Lzdoom3_82)?;
+    let mut watchers = Watchers::default();
 
-// impl Watchers {
-//     fn update(&mut self, game: &Process, memory: &Memory) {
-//         self.name_manager_base
-//             .update(memory.namedata_ptr.deref_offsets(game).ok());
-//         self.player_actor_class
-//             .update(memory.player_actor_class_ptr.deref(game).ok());
-//     }
-// }
+    loop {
+        watchers.update(&process, &mut zdoom)?;
+
+        // this is logic specific to Dismantled
+        if let Some(ref level_name) = watchers.level.pair
+            && let Some(ref player_pos) = watchers.player_pos.pair
+            && let Some(ref gameaction) = watchers.gameaction.pair
+        {
+            if timer::state() == timer::TimerState::NotRunning {
+                if level_name.current == "MAP01"
+                    && player_pos.current.x == -22371.0
+                    && player_pos.current.y == 12672.0
+                    && gameaction.old == GameAction::WorldDone
+                    && gameaction.current == GameAction::Nothing
+                {
+                    timer::start();
+                }
+            }
+
+            if timer::state() == timer::TimerState::Running {
+                match gameaction.current {
+                    GameAction::WorldDone => timer::pause_game_time(),
+                    _ => timer::resume_game_time(),
+                }
+            }
+        }
+
+        next_tick().await;
+    }
+}
+
+#[derive(Default)]
+struct Watchers {
+    level: Watcher<String>,
+    player_pos: Watcher<DVector3>,
+    gameaction: Watcher<GameAction>,
+}
+
+impl Watchers {
+    fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Error> {
+        zdoom.invalidate_cache()?;
+
+        let level_name = match zdoom.level.name() {
+            Ok(level_name) => level_name.to_owned(),
+            Err(_) => "".to_owned(),
+        };
+        asr::timer::set_variable("map", level_name.as_str());
+        self.level.update(Some(level_name));
+
+        let player_pos = match zdoom.player.pos() {
+            Ok(player_pos) => player_pos.to_owned(),
+            Err(_) => DVector3::default(),
+        };
+        asr::timer::set_variable("pos", &format!("{:?}", player_pos));
+        self.player_pos.update(Some(player_pos));
+
+        self.gameaction.update(Some(zdoom.gameaction()?));
+        asr::timer::set_variable(
+            "gameaction",
+            &format!("{:?}", self.gameaction.pair.unwrap().current),
+        );
+
+        Ok(())
+    }
+}
