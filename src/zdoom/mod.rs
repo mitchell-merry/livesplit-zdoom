@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
 use asr::{deep_pointer::DeepPointer, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
@@ -15,7 +15,7 @@ pub mod tarray;
 
 pub struct ZDoom<'a> {
     process: &'a Process,
-    memory: Memory,
+    memory: Rc<Memory>,
     pub name_data: NameManager<'a>,
     classes: HashMap<String, PClass<'a>>,
     pub level: Level<'a>,
@@ -25,11 +25,11 @@ pub struct ZDoom<'a> {
 
 impl<'a> ZDoom<'a> {
     pub fn load(process: &'a Process, version: ZDoomVersion) -> Result<ZDoom<'a>, Error> {
-        let memory = Memory::new(process, version)?;
+        let memory = Rc::new(Memory::new(process, version)?);
 
         let name_data = NameManager::new(&process, memory.namedata_ptr.deref_offsets(process)?);
-        let level = Level::new(&process, memory.level_ptr.deref_offsets(process)?);
-        let player = Player::new(&process, memory.player_ptr.deref::<u64>(process)?.into());
+        let level = Level::new(&process, memory.clone(), memory.level_ptr.deref_offsets(process)?);
+        let player = Player::new(&process, memory.clone(), memory.player_ptr.deref::<u64>(process)?.into());
 
         let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
         let all_classes =
@@ -57,6 +57,7 @@ impl<'a> ZDoom<'a> {
         self.level.invalidate_cache();
         self.player = Player::new(
             self.process,
+            self.memory.clone(),
             self.memory.player_ptr.deref::<u64>(self.process)?.into(),
         );
         self.gameaction = None;
@@ -94,13 +95,15 @@ pub enum ZDoomVersion {
     Gzdoom4_8_2, // Snap the Sentinel
 }
 
-struct Memory {
-    // yes these should be signatures. TODO
+pub struct Memory {
     namedata_ptr: DeepPointer<1>,
     player_ptr: DeepPointer<2>,
     all_classes_ptr: DeepPointer<1>,
     level_ptr: DeepPointer<1>,
     gameaction_ptr: DeepPointer<2>,
+
+    player_pos_offset: u64,
+    level_mapname_offset: u64,
 }
 
 impl Memory {
@@ -109,6 +112,7 @@ impl Memory {
         let main_exe_addr = process.get_module_address(main_module_name)?;
 
         match version {
+            // yes these should be signatures or something. TODO
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
                 player_ptr: DeepPointer::new(
@@ -127,6 +131,8 @@ impl Memory {
                     asr::PointerSize::Bit64,
                     &[0x7044E0, 0],
                 ),
+                level_mapname_offset: 0x2C8,
+                player_pos_offset: 0x48,
             }),
             ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
                 namedata_ptr: DeepPointer::new(
@@ -150,6 +156,8 @@ impl Memory {
                     asr::PointerSize::Bit64,
                     &[0x6FDCF0, 0],
                 ),
+                level_mapname_offset: 0x9D8,
+                player_pos_offset: 0x50,
             }),
         }
     }

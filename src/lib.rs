@@ -7,6 +7,8 @@ use zdoom::{player::DVector3, GameAction, ZDoom, ZDoomVersion};
 
 asr::async_main!(nightly);
 
+use std::{cell::RefCell, rc::Rc};
+
 async fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
         asr::print_message(&panic_info.to_string());
@@ -15,7 +17,7 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach(" lzdoom.exe").await;
+        let process = Process::wait_attach("lzdoom.exe").await;
         process
             .until_closes(async {
                 on_attach(&process).await.expect("problem");

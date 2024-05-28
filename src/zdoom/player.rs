@@ -1,9 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use asr::{Address, Error, Process};
 
-const PLAYER_POS_OFFSET: u32 = 0x48;
-// const PLAYER_POS_OFFSET: u32 = 0x50;
+use super::Memory;
 
 #[derive(Clone, Debug, Default)]
 pub struct DVector3 {
@@ -24,14 +23,16 @@ impl DVector3 {
 
 pub struct Player<'a> {
     process: &'a Process,
+    memory: Rc<Memory>,
     address: Address,
     _pos: Option<DVector3>,
 }
 
 impl<'a> Player<'a> {
-    pub fn new(process: &'a Process, address: Address) -> Self {
+    pub fn new(process: &'a Process, memory: Rc<Memory>, address: Address) -> Self {
         Player {
             process,
+            memory,
             address,
             _pos: None,
         }
@@ -46,7 +47,7 @@ impl<'a> Player<'a> {
             return Ok(pos);
         }
 
-        let pos = DVector3::read(self.process, self.address + PLAYER_POS_OFFSET)?;
+        let pos = DVector3::read(self.process, self.address + self.memory.player_pos_offset)?;
         self._pos = Some(pos.clone());
 
         return Ok(self._pos.as_ref().unwrap());

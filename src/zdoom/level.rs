@@ -1,18 +1,21 @@
+use std::rc::Rc;
+
 use asr::{string::ArrayCString, Address, Error, Process};
 
-const LEVEL_MAPNAME_OFFSET: u64 = 0x2C8;
-// const LEVEL_MAPNAME_OFFSET: u64 = 0x9D8;
+use super::Memory;
 
 pub struct Level<'a> {
     process: &'a Process,
+    memory: Rc<Memory>,
     address: Address,
     _name: Option<String>,
 }
 
 impl<'a> Level<'a> {
-    pub fn new(process: &'a Process, address: Address) -> Level<'a> {
+    pub fn new(process: &'a Process, memory: Rc<Memory>, address: Address) -> Level<'a> {
         Level {
             process,
+            memory,
             address,
             _name: None,
         }
@@ -30,7 +33,7 @@ impl<'a> Level<'a> {
         let c_str = self.process.read_pointer_path::<ArrayCString<128>>(
             self.address,
             asr::PointerSize::Bit64,
-            &[LEVEL_MAPNAME_OFFSET, 0x0],
+            &[self.memory.level_mapname_offset, 0x0],
         )?;
 
         let name = c_str
