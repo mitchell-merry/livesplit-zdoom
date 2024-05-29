@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use asr::{Address, Error, Process};
+use asr::{print_message, Address, Error, Process};
 
 use super::Memory;
 
@@ -21,6 +21,7 @@ impl DVector3 {
     }
 }
 
+#[derive(Clone)]
 pub struct Player<'a> {
     process: &'a Process,
     memory: Rc<Memory>,

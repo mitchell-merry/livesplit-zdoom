@@ -1,6 +1,6 @@
 use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
-use asr::{deep_pointer::DeepPointer, Address, Error, Process};
+use asr::{deep_pointer::DeepPointer, print_message, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 
 use self::{
@@ -19,7 +19,7 @@ pub struct ZDoom<'a> {
     pub name_data: NameManager<'a>,
     classes: HashMap<String, PClass<'a>>,
     pub level: Level<'a>,
-    pub player: Player<'a>,
+    pub player: Option<Player<'a>>,
     pub gameaction: Option<GameAction>,
 }
 
@@ -28,8 +28,11 @@ impl<'a> ZDoom<'a> {
         let memory = Rc::new(Memory::new(process, version)?);
 
         let name_data = NameManager::new(&process, memory.namedata_ptr.deref_offsets(process)?);
-        let level = Level::new(&process, memory.clone(), memory.level_ptr.deref_offsets(process)?);
-        let player = Player::new(&process, memory.clone(), memory.player_ptr.deref::<u64>(process)?.into());
+        let level = Level::new(
+            &process,
+            memory.clone(),
+            memory.level_ptr.deref_offsets(process)?,
+        );
 
         let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
         let all_classes =
@@ -48,18 +51,14 @@ impl<'a> ZDoom<'a> {
             name_data,
             classes,
             level,
-            player,
+            player: None,
             gameaction: None,
         })
     }
 
     pub fn invalidate_cache(&mut self) -> Result<(), Error> {
         self.level.invalidate_cache();
-        self.player = Player::new(
-            self.process,
-            self.memory.clone(),
-            self.memory.player_ptr.deref::<u64>(self.process)?.into(),
-        );
+        self.player = None;
         self.gameaction = None;
 
         Ok(())
@@ -75,15 +74,24 @@ impl<'a> ZDoom<'a> {
         }
     }
 
-    pub fn gameaction(&mut self) -> Result<GameAction, Error> {
-        if let Some(gameaction) = self.gameaction {
-            return Ok(gameaction);
+    pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Error> {
+        if self.player.is_none() {
+            self.player = Some(Player::new(
+                self.process,
+                self.memory.clone(),
+                self.memory.player_ptr.deref::<u64>(self.process)?.into(),
+            ));
         }
 
-        let gameaction = self.memory.gameaction_ptr.deref(self.process)?;
+        Ok(self.player.as_mut().unwrap())
+    }
 
-        self.gameaction = Some(gameaction);
-        return Ok(gameaction);
+    pub fn gameaction(&mut self) -> Result<GameAction, Error> {
+        if self.gameaction.is_none() {
+            self.gameaction = Some(self.memory.gameaction_ptr.deref(self.process)?);
+        }
+
+        Ok(self.gameaction.unwrap())
     }
 }
 
@@ -170,9 +178,10 @@ impl Memory {
     }
 }
 
-#[derive(CheckedBitPattern, Clone, Copy, Debug, PartialEq)]
+#[derive(CheckedBitPattern, Clone, Copy, Debug, Default, PartialEq)]
 #[repr(u32)]
 pub enum GameAction {
+    #[default]
     Nothing,
     LoadLevel, // not used.
     NewGame,

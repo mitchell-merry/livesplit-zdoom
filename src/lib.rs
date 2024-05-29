@@ -27,11 +27,20 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(&process, ZDoomVersion::Lzdoom3_82)?;
+    let mut zdoom = ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("");
     let mut watchers = Watchers::default();
 
     loop {
-        watchers.update(&process, &mut zdoom)?;
+        if !process.is_open() {
+            asr::print_message("process not open");
+            return Ok(())
+        }
+
+        let res = watchers.update(&process, &mut zdoom);
+        if res.is_err() {
+            asr::print_message("failed updating watchers");
+            continue;
+        }
 
         // this is logic specific to Dismantled
         if let Some(ref level_name) = watchers.level.pair
@@ -56,7 +65,7 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
                 }
             }
         }
-        
+
         // this is logic specific to Snap the Sentinel
         // if let Some(ref level_name) = watchers.level.pair
         //     && let Some(ref player_pos) = watchers.player_pos.pair
@@ -94,7 +103,7 @@ struct Watchers {
 
 impl Watchers {
     fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Error> {
-        zdoom.invalidate_cache()?;
+        zdoom.invalidate_cache().expect("");
 
         let level_name = match zdoom.level.name() {
             Ok(level_name) => level_name.to_owned(),
@@ -103,14 +112,16 @@ impl Watchers {
         asr::timer::set_variable("map", level_name.as_str());
         self.level.update(Some(level_name));
 
-        let player_pos = match zdoom.player.pos() {
-            Ok(player_pos) => player_pos.to_owned(),
-            Err(_) => DVector3::default(),
-        };
+        let player_pos = zdoom
+            .player()?
+            .pos()
+            .map(|v| v.to_owned())
+            .unwrap_or_default();
         asr::timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
-        self.gameaction.update(Some(zdoom.gameaction()?));
+        self.gameaction
+            .update(Some(zdoom.gameaction().unwrap_or_default()));
         asr::timer::set_variable(
             "gameaction",
             &format!("{:?}", self.gameaction.pair.unwrap().current),
