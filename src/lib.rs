@@ -33,7 +33,7 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
     loop {
         if !process.is_open() {
             asr::print_message("process not open");
-            return Ok(())
+            return Ok(());
         }
 
         let res = watchers.update(&process, &mut zdoom);
@@ -105,11 +105,8 @@ impl Watchers {
     fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Error> {
         zdoom.invalidate_cache().expect("");
 
-        let level_name = match zdoom.level.name() {
-            Ok(level_name) => level_name.to_owned(),
-            Err(_) => "".to_owned(),
-        };
-        asr::timer::set_variable("map", level_name.as_str());
+        let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();
+        timer::set_variable("map", level_name.as_str());
         self.level.update(Some(level_name));
 
         let player_pos = zdoom
@@ -117,15 +114,12 @@ impl Watchers {
             .pos()
             .map(|v| v.to_owned())
             .unwrap_or_default();
-        asr::timer::set_variable("pos", &format!("{:?}", player_pos));
+        timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
-        self.gameaction
-            .update(Some(zdoom.gameaction().unwrap_or_default()));
-        asr::timer::set_variable(
-            "gameaction",
-            &format!("{:?}", self.gameaction.pair.unwrap().current),
-        );
+        let gameaction = zdoom.gameaction().unwrap_or_default();
+        timer::set_variable("gameaction", &format!("{:?}", gameaction));
+        self.gameaction.update(Some(gameaction));
 
         Ok(())
     }
