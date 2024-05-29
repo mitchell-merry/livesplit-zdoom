@@ -2,12 +2,11 @@
 
 mod zdoom;
 
-use asr::{future::next_tick, time::Duration, timer, watcher::Watcher, Error, Process};
+use asr::{future::next_tick, timer, watcher::Watcher, Error, Process};
 use zdoom::{player::DVector3, GameAction, ZDoom, ZDoomVersion};
 
 asr::async_main!(nightly);
 
-use std::{cell::RefCell, rc::Rc};
 
 async fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
@@ -27,7 +26,7 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(&process, ZDoomVersion::Lzdoom3_82).expect("");
+    let mut zdoom = ZDoom::load(process, ZDoomVersion::Lzdoom3_82).expect("");
     let mut watchers = Watchers::default();
 
     loop {
@@ -36,7 +35,7 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
             return Ok(());
         }
 
-        let res = watchers.update(&process, &mut zdoom);
+        let res = watchers.update(process, &mut zdoom);
         if res.is_err() {
             asr::print_message("failed updating watchers");
             continue;
@@ -47,15 +46,11 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
             && let Some(ref player_pos) = watchers.player_pos.pair
             && let Some(ref gameaction) = watchers.gameaction.pair
         {
-            if timer::state() == timer::TimerState::NotRunning {
-                if level_name.current == "MAP01"
+            if timer::state() == timer::TimerState::NotRunning && level_name.current == "MAP01"
                     && player_pos.current.x == -22371.0
                     && player_pos.current.y == 12672.0
-                    && gameaction.old == GameAction::WorldDone
-                    && gameaction.current == GameAction::Nothing
-                {
-                    timer::start();
-                }
+                    && gameaction.old == GameAction::WorldDone && gameaction.current == GameAction::Nothing {
+                timer::start();
             }
 
             if timer::state() == timer::TimerState::Running {

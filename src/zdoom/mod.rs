@@ -1,6 +1,6 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
-use asr::{deep_pointer::DeepPointer, print_message, Address, Error, Process};
+use asr::{deep_pointer::DeepPointer, Error, Process};
 use bytemuck::CheckedBitPattern;
 
 use self::{
@@ -27,9 +27,9 @@ impl<'a> ZDoom<'a> {
     pub fn load(process: &'a Process, version: ZDoomVersion) -> Result<ZDoom<'a>, Error> {
         let memory = Rc::new(Memory::new(process, version)?);
 
-        let name_data = NameManager::new(&process, memory.namedata_ptr.deref_offsets(process)?);
+        let name_data = NameManager::new(process, memory.namedata_ptr.deref_offsets(process)?);
         let level = Level::new(
-            &process,
+            process,
             memory.clone(),
             memory.level_ptr.deref_offsets(process)?,
         );

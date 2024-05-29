@@ -21,7 +21,7 @@ impl<'a, T: CheckedBitPattern> TArray<'a, T> {
     pub fn into_iter(&self) -> Result<TArrayIterator<'a, T>, Error> {
         let size =
             self.process
-                .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x8 as u64])?;
+                .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x8_u64])?;
         Ok(TArrayIterator::<T> {
             _phantom: PhantomData,
             process: self.process,
@@ -54,8 +54,8 @@ impl<'a, T: CheckedBitPattern> Iterator for TArrayIterator<'a, T> {
             .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x0, offset])
             .ok();
 
-        self.index = self.index + 1;
+        self.index += 1;
 
-        return item;
+        item
     }
 }

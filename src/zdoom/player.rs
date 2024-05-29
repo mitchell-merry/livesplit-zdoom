@@ -1,6 +1,6 @@
-use std::{fmt::Display, rc::Rc};
+use std::rc::Rc;
 
-use asr::{print_message, Address, Error, Process};
+use asr::{Address, Error, Process};
 
 use super::Memory;
 

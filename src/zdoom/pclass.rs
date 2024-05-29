@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 
 use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
 
 use super::{
-    name_manager::{self, NameManager},
+    name_manager::{NameManager},
     tarray::TArray,
 };
 
@@ -30,11 +29,11 @@ impl<'a> PClass<'a> {
     }
 
     pub fn name(&self, name_manager: &NameManager) -> Result<String, Error> {
-        return name_manager.get_chars(self.process.read_pointer_path::<u32>(
+        name_manager.get_chars(self.process.read_pointer_path::<u32>(
             self.address,
             asr::PointerSize::Bit64,
             &[PCLASS_TYPENAME],
-        )?);
+        )?)
     }
 
     pub fn raw_name(&self, process: &Process) -> Result<String, Error> {
@@ -49,7 +48,7 @@ impl<'a> PClass<'a> {
                 .into(),
         );
 
-        return vm_type.name();
+        vm_type.name()
     }
 
     // pub fn show_class(&self, name_manager: &NameManager) -> Result<(), Error> {
@@ -99,10 +98,10 @@ impl<'a> PClass<'a> {
         asr::print_message(&format!("{} fields:", self.name(name_manager)?));
 
         let fields_addr = self.address.add(0x78);
-        let field_addrs = TArray::<u64>::new(self.process, fields_addr.into());
+        let field_addrs = TArray::<u64>::new(self.process, fields_addr);
 
         for field_addr in field_addrs.into_iter()? {
-            let field = PField::new(&self.process, field_addr.into());
+            let field = PField::new(self.process, field_addr.into());
             let flags = field.flags()?;
             let is_static = match flags.contains(PFieldFlags::VARF_Static) {
                 true => " static",
@@ -218,6 +217,6 @@ impl<'a> PType<'a> {
             .expect("name should always be utf-8")
             .to_owned();
 
-        return Ok(b);
+        Ok(b)
     }
 }
