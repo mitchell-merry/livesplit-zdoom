@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use asr::{deep_pointer::DeepPointer, Error, Process};
 use bytemuck::CheckedBitPattern;
+use once_cell::unsync::OnceCell;
 
 use self::{
     level::Level, name_manager::NameManager, pclass::PClass, player::Player, tarray::TArray,
@@ -17,7 +18,7 @@ pub struct ZDoom<'a> {
     process: &'a Process,
     memory: Rc<Memory>,
     pub name_data: Rc<NameManager<'a>>,
-    classes: HashMap<String, PClass<'a>>,
+    classes: OnceCell<HashMap<String, PClass<'a>>>,
     pub level: Level<'a>,
     pub player: Option<Player<'a>>,
     pub gameaction: Option<GameAction>,
@@ -37,25 +38,31 @@ impl<'a> ZDoom<'a> {
             memory.level_ptr.deref_offsets(process)?,
         );
 
-        let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
-        let all_classes =
-            TArray::<u64>::new(process, memory.all_classes_ptr.deref_offsets(process)?);
-
-        for class in all_classes.into_iter()? {
-            let pclass = PClass::<'a>::new(process, name_data.clone(), class.into());
-            let name = pclass.name()?.to_owned();
-
-            classes.insert(name, pclass);
-        }
-
         Ok(ZDoom {
             process,
             memory,
             name_data,
-            classes,
+            classes: OnceCell::new(),
             level,
             player: None,
             gameaction: None,
+        })
+    }
+
+    pub fn classes(&self) -> Result<&HashMap<String, PClass<'a>>, Error> {
+        self.classes.get_or_try_init(|| {
+            let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
+            let all_classes =
+                TArray::<u64>::new(self.process, self.memory.all_classes_ptr.deref_offsets(self.process)?);
+    
+            for class in all_classes.into_iter()? {
+                let pclass = PClass::<'a>::new(self.process, self.name_data.clone(), class.into());
+                let name = pclass.name()?.to_owned();
+    
+                classes.insert(name, pclass);
+            }
+
+            Ok(classes)
         })
     }
 
@@ -67,17 +74,19 @@ impl<'a> ZDoom<'a> {
         Ok(())
     }
 
-    pub fn find_class(&self, name: &str) -> Option<&PClass<'a>> {
-        self.classes.get(name)
+    pub fn find_class(&self, name: &str) -> Result<Option<&PClass<'a>>, Error> {
+        Ok(self.classes()?.get(name))
     }
 
-    pub fn dump(&self) {
-        for (name, class) in self.classes.iter() {
+    pub fn dump(&self) -> Result<(), Error> {
+        for (name, class) in self.classes()?.iter() {
             let c = class
                 .show_class()
                 .unwrap_or(format!("// failed getting {name}"));
             asr::print_message(&format!("{c}\n"));
         }
+
+        Ok(())
     }
 
     pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Error> {

@@ -42,27 +42,27 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
         }
 
         // this is logic specific to Dismantled
-        if let Some(ref level_name) = watchers.level.pair
-            && let Some(ref player_pos) = watchers.player_pos.pair
-            && let Some(ref gameaction) = watchers.gameaction.pair
-        {
-            if timer::state() == timer::TimerState::NotRunning
-                && level_name.current == "MAP01"
-                && player_pos.current.x == -22371.0
-                && player_pos.current.y == 12672.0
-                && gameaction.old == GameAction::WorldDone
-                && gameaction.current == GameAction::Nothing
-            {
-                timer::start();
-            }
+        // if let Some(ref level_name) = watchers.level.pair
+        //     && let Some(ref player_pos) = watchers.player_pos.pair
+        //     && let Some(ref gameaction) = watchers.gameaction.pair
+        // {
+        //     if timer::state() == timer::TimerState::NotRunning
+        //         && level_name.current == "MAP01"
+        //         && player_pos.current.x == -22371.0
+        //         && player_pos.current.y == 12672.0
+        //         && gameaction.old == GameAction::WorldDone
+        //         && gameaction.current == GameAction::Nothing
+        //     {
+        //         timer::start();
+        //     }
 
-            if timer::state() == timer::TimerState::Running {
-                match gameaction.current {
-                    GameAction::WorldDone => timer::pause_game_time(),
-                    _ => timer::resume_game_time(),
-                }
-            }
-        }
+        //     if timer::state() == timer::TimerState::Running {
+        //         match gameaction.current {
+        //             GameAction::WorldDone => timer::pause_game_time(),
+        //             _ => timer::resume_game_time(),
+        //         }
+        //     }
+        // }
 
         // this is logic specific to Snap the Sentinel
         // if let Some(ref level_name) = watchers.level.pair
