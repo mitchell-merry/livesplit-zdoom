@@ -15,7 +15,7 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach("lzdoom.exe").await;
+        let process = Process::wait_attach("SELACO.exe").await;
         process
             .until_closes(async {
                 on_attach(&process).await.expect("problem");
@@ -25,8 +25,8 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(process, ZDoomVersion::Lzdoom3_82).expect("");
-    zdoom.dump();
+    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8_2, "Selaco.exe").expect("");
+    // zdoom.dump();
     let mut watchers = Watchers::default();
 
     loop {

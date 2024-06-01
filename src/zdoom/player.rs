@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use asr::{Address, Error, Process};
 
-use super::Memory;
+use super::{pclass::PClass, Memory};
 
 #[derive(Clone, Debug, Default)]
 pub struct DVector3 {
@@ -26,15 +26,22 @@ pub struct Player<'a> {
     process: &'a Process,
     memory: Rc<Memory>,
     address: Address,
+    actor_class: PClass<'a>,
     _pos: Option<DVector3>,
 }
 
 impl<'a> Player<'a> {
-    pub fn new(process: &'a Process, memory: Rc<Memory>, address: Address) -> Self {
+    pub fn new(
+        process: &'a Process,
+        memory: Rc<Memory>,
+        address: Address,
+        actor_class: PClass<'a>,
+    ) -> Self {
         Player {
             process,
             memory,
             address,
+            actor_class,
             _pos: None,
         }
     }
@@ -48,7 +55,17 @@ impl<'a> Player<'a> {
             return Ok(pos);
         }
 
-        let pos = DVector3::read(self.process, self.address + self.memory.player_pos_offset)?;
+        let pos = DVector3::read(
+            self.process,
+            self.address
+                + self
+                    .actor_class
+                    .fields()?
+                    .get("pos")
+                    .unwrap_or_else(|| panic!("can't find the position field on the actor"))
+                    .offset()?
+                    .to_owned(),
+        )?;
         self._pos = Some(pos.clone());
 
         return Ok(self._pos.as_ref().unwrap());

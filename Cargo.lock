@@ -15,6 +15,7 @@ source = "git+https://github.com/LiveSplit/asr#5eb46194eccb3ae81791eb9bfba70e850
 dependencies = [
  "arrayvec",
  "bytemuck",
+ "memchr",
  "time",
  "wasi",
 ]
@@ -63,6 +64,12 @@ dependencies = [
  "bytemuck",
  "once_cell",
 ]
+
+[[package]]
+name = "memchr"
+version = "2.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
 
 [[package]]
 name = "num-conv"

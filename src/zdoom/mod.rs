@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use asr::{deep_pointer::DeepPointer, Error, Process};
+use asr::{deep_pointer::DeepPointer, signature::Signature, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 
@@ -25,18 +25,15 @@ pub struct ZDoom<'a> {
 }
 
 impl<'a> ZDoom<'a> {
-    pub fn load(process: &'a Process, version: ZDoomVersion) -> Result<ZDoom<'a>, Error> {
-        let memory = Rc::new(Memory::new(process, version)?);
+    pub fn load(
+        process: &'a Process,
+        version: ZDoomVersion,
+        main_module_name: &str,
+    ) -> Result<ZDoom<'a>, Error> {
+        let memory = Rc::new(Memory::new(process, version, main_module_name).expect("a"));
 
-        let name_data = Rc::new(NameManager::new(
-            process,
-            memory.namedata_ptr.deref_offsets(process)?,
-        ));
-        let level = Level::new(
-            process,
-            memory.clone(),
-            memory.level_ptr.deref_offsets(process)?,
-        );
+        let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
+        let level = Level::new(process, memory.clone(), memory.level_addr);
 
         Ok(ZDoom {
             process,
@@ -52,13 +49,12 @@ impl<'a> ZDoom<'a> {
     pub fn classes(&self) -> Result<&HashMap<String, PClass<'a>>, Error> {
         self.classes.get_or_try_init(|| {
             let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
-            let all_classes =
-                TArray::<u64>::new(self.process, self.memory.all_classes_ptr.deref_offsets(self.process)?);
-    
+            let all_classes = TArray::<u64>::new(self.process, self.memory.all_classes_addr);
+
             for class in all_classes.into_iter()? {
                 let pclass = PClass::<'a>::new(self.process, self.name_data.clone(), class.into());
                 let name = pclass.name()?.to_owned();
-    
+
                 classes.insert(name, pclass);
             }
 
@@ -91,10 +87,16 @@ impl<'a> ZDoom<'a> {
 
     pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Error> {
         if self.player.is_none() {
+            let actor_class = self
+                .classes()?
+                .get("Actor")
+                .unwrap_or_else(|| panic!("can't find the actor class"))
+                .to_owned();
             self.player = Some(Player::new(
                 self.process,
                 self.memory.clone(),
-                self.memory.player_ptr.deref::<u64>(self.process)?.into(),
+                self.process.read::<u64>(self.memory.players_addr)?.into(),
+                actor_class,
             ));
         }
 
@@ -103,7 +105,7 @@ impl<'a> ZDoom<'a> {
 
     pub fn gameaction(&mut self) -> Result<GameAction, Error> {
         if self.gameaction.is_none() {
-            self.gameaction = Some(self.memory.gameaction_ptr.deref(self.process)?);
+            self.gameaction = Some(self.process.read(self.memory.gameaction_addr)?);
         }
 
         Ok(self.gameaction.unwrap())
@@ -119,76 +121,68 @@ pub enum ZDoomVersion {
 }
 
 pub struct Memory {
-    namedata_ptr: DeepPointer<1>,
-    player_ptr: DeepPointer<2>,
-    all_classes_ptr: DeepPointer<1>,
-    level_ptr: DeepPointer<1>,
-    gameaction_ptr: DeepPointer<2>,
+    namedata_addr: Address,
+    players_addr: Address,
+    all_classes_addr: Address,
+    level_addr: Address,
+    gameaction_addr: Address,
 
-    player_pos_offset: u64,
     level_mapname_offset: u64,
 }
 
 impl Memory {
-    fn new(process: &Process, version: ZDoomVersion) -> Result<Memory, Error> {
-        let main_module_name = Memory::get_main_module_name(version);
+    fn new(
+        process: &Process,
+        version: ZDoomVersion,
+        main_module_name: &str,
+    ) -> Result<Memory, Error> {
         let main_exe_addr = process.get_module_address(main_module_name)?;
+        let module_range = process.get_module_range(main_module_name)?;
 
         match version {
             // yes these should be signatures or something. TODO
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
-                namedata_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F8E10]),
-                player_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x7043C0, 0x0],
-                ),
-                all_classes_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x9F8980],
-                ),
-                level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x9F5B78]),
-                gameaction_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x7044E0, 0],
-                ),
+                namedata_addr: main_exe_addr + 0x9F8E10,
+                players_addr: main_exe_addr + 0x7043C0,
+                all_classes_addr: main_exe_addr + 0x9F8980,
+                level_addr: main_exe_addr + 0x9F5B78,
+                gameaction_addr: main_exe_addr + 0x7044E0,
                 level_mapname_offset: 0x2C8,
-                player_pos_offset: 0x48,
             }),
-            ZDoomVersion::Gzdoom4_8_2 => Ok(Memory {
-                namedata_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x11880A0],
-                ),
-                player_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x6FDBD0, 0x0],
-                ),
-                all_classes_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x11147C0],
-                ),
-                level_ptr: DeepPointer::new(main_exe_addr, asr::PointerSize::Bit64, &[0x10FD9B0]),
-                gameaction_ptr: DeepPointer::new(
-                    main_exe_addr,
-                    asr::PointerSize::Bit64,
-                    &[0x6FDCF0, 0],
-                ),
-                level_mapname_offset: 0x9D8,
-                player_pos_offset: 0x50,
-            }),
-        }
-    }
+            ZDoomVersion::Gzdoom4_8_2 => {
+                let s = Signature::<23>::new(
+                    "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
+                );
+                let namedata_addr = scan_rel(process, module_range, &s, 0x9, 0x4)?;
 
-    fn get_main_module_name(version: ZDoomVersion) -> &'static str {
-        match version {
-            ZDoomVersion::Lzdoom3_82 => "lzdoom.exe",
-            ZDoomVersion::Gzdoom4_8_2 => "gzdoom.exe",
+                let s = Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00");
+                let gameaction_addr = scan_rel(process, module_range, &s, 0xF, 0x8)?;
+
+                let s = Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8");
+                let level_addr: Address = process
+                    .read::<u64>(scan_rel(process, module_range, &s, 0x3, 0x4)?)?
+                    .into();
+                asr::print_message(&format!("{level_addr:?}"));
+
+                let s = Signature::<11>::new("48 8B 84 29 ?? ?? ?? ?? 48 85 C0");
+                let players_addr_offset = process.read::<u32>(
+                    s.scan_process_range(process, module_range)
+                        .unwrap_or_else(|| panic!("failed to get address"))
+                        + 0x4,
+                )?;
+
+                let s = Signature::<17>::new("48 8B 05 ?? ?? ?? ?? 48 8B 1C F0 48 8B C3 48 85 DB");
+                let all_classes_addr = scan_rel(process, module_range, &s, 0x3, 0x4)?;
+
+                Ok(Memory {
+                    namedata_addr,
+                    players_addr: main_exe_addr + players_addr_offset,
+                    all_classes_addr,
+                    level_addr,
+                    gameaction_addr,
+                    level_mapname_offset: 0x9F8,
+                })
+            }
         }
     }
 }
@@ -219,4 +213,19 @@ pub enum GameAction {
     Intro,
     Intermission,
     TitleLoop,
+}
+
+fn scan_rel<const N: usize>(
+    process: &Process,
+    module_range: (Address, u64),
+    signature: &Signature<N>,
+    offset: u32,
+    next_instruction: u32,
+) -> Result<Address, Error> {
+    let addr = signature
+        .scan_process_range(process, module_range)
+        .unwrap_or_else(|| panic!("failed to get address"))
+        + offset;
+
+    Ok(addr + process.read::<u32>(addr)? + next_instruction)
 }

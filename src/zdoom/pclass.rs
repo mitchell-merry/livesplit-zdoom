@@ -12,7 +12,7 @@ const PFIELD_TYPE: u64 = 0x40;
 const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
-const PCLASS_FIELDS: u64 = 0x78;
+const PCLASS_FIELDS: u64 = 0x80;
 const PCLASS_PTYPE: u64 = 0x88;
 
 const PTYPE_SIZE: u64 = 0xC;
@@ -20,6 +20,7 @@ const PTYPE_ALIGN: u64 = 0x10;
 const PTYPE_FLAGS: u64 = 0x14;
 const PTYPE_DESCRIPTIVE_NAME: u64 = 0x48;
 
+#[derive(Clone)]
 pub struct PClass<'a> {
     process: &'a Process,
     name_manager: Rc<NameManager<'a>>,
@@ -72,6 +73,7 @@ impl<'a> PClass<'a> {
 
             let fields_addr = self.address.add(PCLASS_FIELDS);
             let field_addrs = TArray::<u64>::new(self.process, fields_addr);
+            // asr::print_message(&format!("{:?}", self.address));
 
             for field_addr in field_addrs.into_iter()? {
                 let field =
@@ -104,6 +106,12 @@ impl<'a> PClass<'a> {
         let mut sorted_fields = Vec::<PField<'a>>::new();
 
         for (_name, field) in fields {
+            sorted_fields.push(field.to_owned());
+        }
+
+        sorted_fields.sort();
+
+        for field in sorted_fields {
             let modifier = if field.flags()?.contains(PFieldFlags::Static) {
                 "static "
             } else {
@@ -119,8 +127,6 @@ impl<'a> PClass<'a> {
                 field.ptype()?.align()?,
             ))
         }
-
-        sorted_fields.sort();
 
         struct_out.push('}');
 
@@ -195,6 +201,7 @@ bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct PField<'a> {
     process: &'a Process,
     name_manager: Rc<NameManager<'a>>,
@@ -293,11 +300,11 @@ impl<'a> Ord for PField<'a> {
         }
 
         let offset = self.offset().map(|o| o.to_owned()).unwrap_or_default();
-        let other_offset = self.offset().map(|o| o.to_owned()).unwrap_or_default();
+        let other_offset = other.offset().map(|o| o.to_owned()).unwrap_or_default();
 
         if offset < other_offset {
             return Ordering::Less;
-        } else if other_offset > offset {
+        } else if offset > other_offset {
             return Ordering::Greater;
         }
 
@@ -306,7 +313,7 @@ impl<'a> Ord for PField<'a> {
 }
 
 bitflags! {
-    #[derive(Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct TypeFlags: u32 {
         const Scalar = 1 << 0;
         const Container = 1 << 1;
@@ -320,6 +327,7 @@ bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct PType<'a> {
     process: &'a Process,
     address: Address,
