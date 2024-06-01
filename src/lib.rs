@@ -7,7 +7,6 @@ use zdoom::{player::DVector3, GameAction, ZDoom, ZDoomVersion};
 
 asr::async_main!(nightly);
 
-
 async fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
         asr::print_message(&panic_info.to_string());
@@ -27,6 +26,7 @@ async fn main() {
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
     let mut zdoom = ZDoom::load(process, ZDoomVersion::Lzdoom3_82).expect("");
+    zdoom.dump();
     let mut watchers = Watchers::default();
 
     loop {
@@ -46,10 +46,13 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
             && let Some(ref player_pos) = watchers.player_pos.pair
             && let Some(ref gameaction) = watchers.gameaction.pair
         {
-            if timer::state() == timer::TimerState::NotRunning && level_name.current == "MAP01"
-                    && player_pos.current.x == -22371.0
-                    && player_pos.current.y == 12672.0
-                    && gameaction.old == GameAction::WorldDone && gameaction.current == GameAction::Nothing {
+            if timer::state() == timer::TimerState::NotRunning
+                && level_name.current == "MAP01"
+                && player_pos.current.x == -22371.0
+                && player_pos.current.y == 12672.0
+                && gameaction.old == GameAction::WorldDone
+                && gameaction.current == GameAction::Nothing
+            {
                 timer::start();
             }
 

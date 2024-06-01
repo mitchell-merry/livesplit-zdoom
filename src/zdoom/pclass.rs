@@ -1,11 +1,10 @@
+use std::{cmp::Ordering, collections::HashMap, iter::Once, rc::Rc};
 
 use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
+use once_cell::unsync::OnceCell;
 
-use super::{
-    name_manager::{NameManager},
-    tarray::TArray,
-};
+use super::{name_manager::NameManager, tarray::TArray};
 
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
@@ -13,97 +12,142 @@ const PFIELD_TYPE: u64 = 0x40;
 const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
-const PCLASS_DESCRIPTIVE_NAME: u64 = 0x88;
+const PCLASS_FIELDS: u64 = 0x78;
+const PCLASS_PTYPE: u64 = 0x88;
+
+const PTYPE_SIZE: u64 = 0xC;
+const PTYPE_ALIGN: u64 = 0x10;
+const PTYPE_FLAGS: u64 = 0x14;
+const PTYPE_DESCRIPTIVE_NAME: u64 = 0x48;
 
 pub struct PClass<'a> {
     process: &'a Process,
+    name_manager: Rc<NameManager<'a>>,
     address: Address,
+
+    name: OnceCell<String>,
+    ptype: OnceCell<PType<'a>>,
+    fields: OnceCell<HashMap<String, PField<'a>>>, // does not contain fields of superclasses
 }
 
 impl<'a> PClass<'a> {
-    pub fn new(process: &'a Process, addr: Address) -> PClass<'a> {
+    pub fn new(
+        process: &'a Process,
+        name_manager: Rc<NameManager<'a>>,
+        address: Address,
+    ) -> PClass<'a> {
         PClass {
             process,
-            address: addr,
+            name_manager,
+            address,
+
+            name: OnceCell::new(),
+            ptype: OnceCell::new(),
+            fields: OnceCell::new(),
         }
     }
 
-    pub fn name(&self, name_manager: &NameManager) -> Result<String, Error> {
-        name_manager.get_chars(self.process.read_pointer_path::<u32>(
-            self.address,
-            asr::PointerSize::Bit64,
-            &[PCLASS_TYPENAME],
-        )?)
-    }
-
-    pub fn raw_name(&self, process: &Process) -> Result<String, Error> {
-        let vm_type = PType::new(
-            process,
-            process
-                .read_pointer_path::<u64>(
+    pub fn name(&self) -> Result<&String, Error> {
+        self.name.get_or_try_init(|| {
+            self.name_manager
+                .get_chars(self.process.read_pointer_path::<u32>(
                     self.address,
                     asr::PointerSize::Bit64,
-                    &[PCLASS_DESCRIPTIVE_NAME],
-                )?
-                .into(),
-        );
-
-        vm_type.name()
+                    &[PCLASS_TYPENAME],
+                )?)
+        })
     }
 
-    // pub fn show_class(&self, name_manager: &NameManager) -> Result<(), Error> {
-    //     let mut struct_out = String::new();
+    pub fn ptype(&self) -> Result<&PType<'a>, Error> {
+        self.ptype.get_or_try_init(|| {
+            let address = self.process.read::<u64>(self.address + PCLASS_PTYPE)?;
 
-    //     let parent_class: Address = self
-    //         .process
-    //         .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x0])?
-    //         .into();
+            Ok(PType::new(self.process, address.into()))
+        })
+    }
 
-    //     struct_out.push_str(&format!("class {} ", self.name(name_manager)?));
+    pub fn fields<'b>(&'b self) -> Result<&'b HashMap<String, PField<'a>>, Error> {
+        self.fields.get_or_try_init(|| {
+            let mut fields = HashMap::new();
 
-    //     if parent_class != Address::NULL {
-    //         let parent_class = PClass::new(self.process, parent_class);
-    //         struct_out.push_str(&format!(": public {} ", parent_class.name(name_manager)?));
-    //     }
+            let fields_addr = self.address.add(PCLASS_FIELDS);
+            let field_addrs = TArray::<u64>::new(self.process, fields_addr);
 
-    //     struct_out.push_str("{\n");
+            for field_addr in field_addrs.into_iter()? {
+                let field =
+                    PField::new(&self.process, self.name_manager.clone(), field_addr.into());
+                fields.insert(field.name().map(|f| f.to_owned())?, field);
+            }
 
-    //     let fields_addr = self.address.add(0x78);
-    //     let field_addrs = TArray::<u64>::new(self.process, fields_addr.into());
+            Ok(fields)
+        })
+    }
 
-    //     let mut fields = Vec::<PField>::new();
+    pub fn show_class(&self) -> Result<String, Error> {
+        let mut struct_out = String::new();
 
-    //     for field_addr in field_addrs.into_iter()? {
-    //         let field = PField::new(&self.process, field_addr.into());
-    //     }
+        let parent_class: Address = self
+            .process
+            .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x0])?
+            .into();
 
-    //     fields.sort();
+        struct_out.push_str(&format!("class {} ", self.name()?));
 
-    //     struct_out.push('}');
+        if parent_class != Address::NULL {
+            let parent_class = PClass::new(self.process, self.name_manager.clone(), parent_class);
+            struct_out.push_str(&format!(": public {} ", parent_class.name()?));
+        }
 
-    //     Ok(())
-    // }
+        struct_out.push_str("{\n");
 
-    pub fn debug_all_fields(&self, name_manager: &NameManager) -> Result<(), Error> {
+        let fields = self.fields()?;
+        let mut sorted_fields = Vec::<PField<'a>>::new();
+
+        for (_name, field) in fields {
+            let modifier = if field.flags()?.contains(PFieldFlags::Static) {
+                "static "
+            } else {
+                ""
+            };
+            struct_out.push_str(&format!(
+                "  {}{} {}; // offset: 0x{:X}, size: 0x{:X}, align: 0x{:X}\n",
+                modifier,
+                field.ptype()?.name()?,
+                field.name()?,
+                field.offset()?,
+                field.ptype()?.size()?,
+                field.ptype()?.align()?,
+            ))
+        }
+
+        sorted_fields.sort();
+
+        struct_out.push('}');
+
+        Ok(struct_out)
+    }
+
+    pub fn debug_all_fields(&self) -> Result<(), Error> {
         let parent_class: Address = self
             .process
             .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x0])?
             .into();
 
         if parent_class != Address::NULL {
-            let parent_class = PClass::new(self.process, parent_class);
-            parent_class.debug_all_fields(name_manager)?;
+            let parent_class = PClass::new(self.process, self.name_manager.clone(), parent_class);
+            parent_class.debug_all_fields()?;
         }
 
-        asr::print_message(&format!("{} fields:", self.name(name_manager)?));
+        asr::print_message(&format!("{} fields:", self.name()?));
 
-        let fields_addr = self.address.add(0x78);
+        let fields_addr = self.address.add(PCLASS_FIELDS);
+
         let field_addrs = TArray::<u64>::new(self.process, fields_addr);
 
         for field_addr in field_addrs.into_iter()? {
-            let field = PField::new(self.process, field_addr.into());
+            let field = PField::new(self.process, self.name_manager.clone(), field_addr.into());
             let flags = field.flags()?;
-            let is_static = match flags.contains(PFieldFlags::VARF_Static) {
+            let is_static = match flags.contains(PFieldFlags::Static) {
                 true => " static",
                 false => "       ",
             };
@@ -111,7 +155,7 @@ impl<'a> PClass<'a> {
             asr::print_message(&format!(
                 "  => {is_static} 0x{:X}  {}: {} [{:?}]",
                 field.offset()?,
-                field.name(name_manager)?,
+                field.name()?,
                 field.ptype()?.name()?,
                 flags
             ));
@@ -122,101 +166,214 @@ impl<'a> PClass<'a> {
 }
 
 bitflags! {
-    #[derive(Debug, PartialEq)]
-    struct PFieldFlags: u32 {
-        const VARF_Optional = 1 << 0;        // func param is optional
-        const VARF_Method = 1 << 1;          // func has an implied self parameter
-        const VARF_Action = 1 << 2;          // func has implied owner and state parameters
-        const VARF_Native = 1 << 3;	         // func is native code, field is natively defined
-        const VARF_ReadOnly = 1 << 4;        // field is read only, do not write to it
-        const VARF_Private = 1 << 5;         // field is private to containing class
-        const VARF_Protected = 1 << 6;       // field is only accessible by containing class and children.
-        const VARF_Deprecated = 1 << 7;	     // Deprecated fields should output warnings when used.
-        const VARF_Virtual = 1 << 8;	     // function is virtual
-        const VARF_Final = 1 << 9;	         // Function may not be overridden in subclasses
-        const VARF_In = 1 << 10;
-        const VARF_Out = 1 << 11;
-        const VARF_Implicit = 1 << 12;	     // implicitly created parameters (i.e. do not compare types when checking function signatures)
-        const VARF_Static = 1 << 13;
-        const VARF_InternalAccess = 1 << 14; // overrides VARF_ReadOnly for internal script code.
-        const VARF_Override = 1 << 15;	     // overrides a virtual function from the parent class.
-        const VARF_Ref = 1 << 16;	         // argument is passed by reference.
-        const VARF_Transient = 1 << 17;      // don't auto serialize field.
-        const VARF_Meta = 1 << 18;	         // static class data (by necessity read only.)
-        const VARF_VarArg = 1 << 19;         // [ZZ] vararg: don't typecheck values after ... in function signature
-        const VARF_UI = 1 << 20;             // [ZZ] ui: object is ui-scope only (can't modify playsim)
-        const VARF_Play = 1 << 21;           // [ZZ] play: object is playsim-scope only (can't access ui)
-        const VARF_VirtualScope	= 1 << 22;   // [ZZ] virtualscope: object should use the scope of the particular class it's being used with (methods only)
-        const VARF_ClearScope = 1 << 23;     // [ZZ] clearscope: this method ignores the member access chain that leads to it and is always plain data.
+    #[derive(Clone, Debug, Default, PartialEq)]
+    pub struct PFieldFlags: u32 {
+        const Optional = 1 << 0;        // func param is optional
+        const Method = 1 << 1;          // func has an implied self parameter
+        const Action = 1 << 2;          // func has implied owner and state parameters
+        const Native = 1 << 3;          // func is native code, field is natively defined
+        const ReadOnly = 1 << 4;        // field is read only, do not write to it
+        const Private = 1 << 5;         // field is private to containing class
+        const Protected = 1 << 6;       // field is only accessible by containing class and children.
+        const Deprecated = 1 << 7;      // Deprecated fields should output warnings when used.
+        const Virtual = 1 << 8;         // function is virtual
+        const Final = 1 << 9;           // Function may not be overridden in subclasses
+        const In = 1 << 10;
+        const Out = 1 << 11;
+        const Implicit = 1 << 12;       // implicitly created parameters (i.e. do not compare types when checking function signatures)
+        const Static = 1 << 13;
+        const InternalAccess = 1 << 14; // overrides ReadOnly for internal script code.
+        const Override = 1 << 15;       // overrides a virtual function from the parent class.
+        const Ref = 1 << 16;            // argument is passed by reference.
+        const Transient = 1 << 17;      // don't auto serialize field.
+        const Meta = 1 << 18;           // static class data (by necessity read only.)
+        const VarArg = 1 << 19;         // [ZZ] vararg: don't typecheck values after ... in function signature
+        const UI = 1 << 20;             // [ZZ] ui: object is ui-scope only (can't modify playsim)
+        const Play = 1 << 21;           // [ZZ] play: object is playsim-scope only (can't access ui)
+        const VirtualScope= 1 << 22;    // [ZZ] virtualscope: object should use the scope of the particular class it's being used with (methods only)
+        const ClearScope = 1 << 23;     // [ZZ] clearscope: this method ignores the member access chain that leads to it and is always plain data.
     }
 }
 
-struct PField<'a> {
+pub struct PField<'a> {
     process: &'a Process,
+    name_manager: Rc<NameManager<'a>>,
     address: Address,
+
+    name: OnceCell<String>,
+    offset: OnceCell<u32>,
+    ptype: OnceCell<PType<'a>>,
+    flags: OnceCell<PFieldFlags>,
 }
 
 impl<'a> PField<'a> {
-    pub fn new(process: &'a Process, address: Address) -> PField<'a> {
-        PField { process, address }
+    pub fn new(
+        process: &'a Process,
+        name_manager: Rc<NameManager<'a>>,
+        address: Address,
+    ) -> PField<'a> {
+        PField {
+            process,
+            name_manager,
+            address,
+            name: OnceCell::new(),
+            offset: OnceCell::new(),
+            ptype: OnceCell::new(),
+            flags: OnceCell::new(),
+        }
     }
 
-    pub fn name(&self, name_manager: &NameManager) -> Result<String, Error> {
-        let name_index: u32 = self.process.read_pointer_path(
-            self.address,
-            asr::PointerSize::Bit64,
-            &[PFIELD_NAME],
-        )?;
+    pub fn name(&self) -> Result<&String, Error> {
+        self.name.get_or_try_init(|| {
+            let name_index: u32 = self.process.read(self.address + PFIELD_NAME)?;
 
-        name_manager.get_chars(name_index)
+            self.name_manager.get_chars(name_index)
+        })
     }
 
-    pub fn offset(&self) -> Result<u32, Error> {
-        self.process
-            .read_pointer_path(self.address, asr::PointerSize::Bit64, &[PFIELD_OFFSET])
+    pub fn offset(&self) -> Result<&u32, Error> {
+        self.offset
+            .get_or_try_init(|| self.process.read(self.address + PFIELD_OFFSET))
     }
 
-    pub fn ptype(&self) -> Result<PType, Error> {
-        let ptype: Address = self
-            .process
-            .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[PFIELD_TYPE])?
-            .into();
-        Ok(PType::new(self.process, ptype))
+    pub fn ptype(&self) -> Result<&PType, Error> {
+        self.ptype.get_or_try_init(|| {
+            let ptype_address: Address =
+                self.process.read::<u64>(self.address + PFIELD_TYPE)?.into();
+
+            Ok(PType::new(self.process, ptype_address))
+        })
     }
 
-    pub fn flags(&self) -> Result<PFieldFlags, Error> {
-        Ok(PFieldFlags::from_bits_truncate(
-            self.process.read_pointer_path::<u32>(
-                self.address,
-                asr::PointerSize::Bit64,
-                &[PFIELD_FLAGS],
-            )?,
-        ))
+    pub fn flags(&self) -> Result<&PFieldFlags, Error> {
+        self.flags.get_or_try_init(|| {
+            Ok(PFieldFlags::from_bits_truncate(
+                self.process.read::<u32>(self.address + PFIELD_FLAGS)?,
+            ))
+        })
     }
 }
 
-struct PType<'a> {
+impl<'a> PartialEq for PField<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        let flags = self.flags();
+        let other_flags = other.flags();
+        if flags.is_err() || other_flags.is_err() {
+            return false;
+        }
+
+        let name = self.name();
+        let other_name = other.name();
+        if name.is_err() || other_name.is_err() {
+            return false;
+        }
+
+        return name.unwrap() == other_name.unwrap() || flags.unwrap() == other_flags.unwrap();
+    }
+}
+
+impl<'a> Eq for PField<'a> {}
+
+impl<'a> PartialOrd for PField<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for PField<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let flags = self.flags().map(|f| f.to_owned()).unwrap_or_default();
+        let other_flags = other.flags().map(|f| f.to_owned()).unwrap_or_default();
+
+        if flags.contains(PFieldFlags::Static) && !other_flags.contains(PFieldFlags::Static) {
+            return Ordering::Less;
+        } else if !flags.contains(PFieldFlags::Static) && other_flags.contains(PFieldFlags::Static)
+        {
+            return Ordering::Greater;
+        }
+
+        let offset = self.offset().map(|o| o.to_owned()).unwrap_or_default();
+        let other_offset = self.offset().map(|o| o.to_owned()).unwrap_or_default();
+
+        if offset < other_offset {
+            return Ordering::Less;
+        } else if other_offset > offset {
+            return Ordering::Greater;
+        }
+
+        return Ordering::Equal;
+    }
+}
+
+bitflags! {
+    #[derive(Debug, PartialEq)]
+    pub struct TypeFlags: u32 {
+        const Scalar = 1 << 0;
+        const Container = 1 << 1;
+        const Int = 1 << 2;
+        const IntNotInt = 1 << 3;
+        const Float = 1 << 4;
+        const Pointer = 1 << 5;
+        const ObjectPointer = 1 << 6;
+        const ClassPointer = 1 << 7;
+        const Array = 1 << 8;
+    }
+}
+
+pub struct PType<'a> {
     process: &'a Process,
     address: Address,
+
+    size: OnceCell<u32>,
+    align: OnceCell<u32>,
+    flags: OnceCell<TypeFlags>,
+    name: OnceCell<String>,
 }
 
 impl<'a> PType<'a> {
-    fn new(process: &'a Process, address: Address) -> PType<'a> {
-        PType { process, address }
+    fn new(process: &'a Process, address: Address) -> PType {
+        PType {
+            process,
+            address,
+            size: OnceCell::new(),
+            align: OnceCell::new(),
+            flags: OnceCell::new(),
+            name: OnceCell::new(),
+        }
     }
 
-    fn name(&self) -> Result<String, Error> {
-        let c_str = self.process.read_pointer_path::<ArrayCString<128>>(
-            self.address,
-            asr::PointerSize::Bit64,
-            &[0x48, 0x0],
-        );
+    fn size(&self) -> Result<&u32, Error> {
+        self.size
+            .get_or_try_init(|| self.process.read::<u32>(self.address.add(PTYPE_SIZE)))
+    }
 
-        let b = c_str?
-            .validate_utf8()
-            .expect("name should always be utf-8")
-            .to_owned();
+    fn align(&self) -> Result<&u32, Error> {
+        self.align
+            .get_or_try_init(|| self.process.read::<u32>(self.address.add(PTYPE_ALIGN)))
+    }
 
-        Ok(b)
+    fn flags(&self) -> Result<&TypeFlags, Error> {
+        self.flags.get_or_try_init(|| {
+            Ok(TypeFlags::from_bits_truncate(
+                self.process.read(self.address + PTYPE_FLAGS)?,
+            ))
+        })
+    }
+
+    fn name(&self) -> Result<&String, Error> {
+        self.name.get_or_try_init(|| {
+            let c_str = self.process.read_pointer_path::<ArrayCString<128>>(
+                self.address,
+                asr::PointerSize::Bit64,
+                &[PTYPE_DESCRIPTIVE_NAME, 0x0],
+            );
+
+            let b = c_str?
+                .validate_utf8()
+                .expect("name should always be utf-8")
+                .to_owned();
+
+            Ok(b)
+        })
     }
 }

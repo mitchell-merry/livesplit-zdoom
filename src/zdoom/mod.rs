@@ -16,7 +16,7 @@ pub mod tarray;
 pub struct ZDoom<'a> {
     process: &'a Process,
     memory: Rc<Memory>,
-    pub name_data: NameManager<'a>,
+    pub name_data: Rc<NameManager<'a>>,
     classes: HashMap<String, PClass<'a>>,
     pub level: Level<'a>,
     pub player: Option<Player<'a>>,
@@ -27,7 +27,10 @@ impl<'a> ZDoom<'a> {
     pub fn load(process: &'a Process, version: ZDoomVersion) -> Result<ZDoom<'a>, Error> {
         let memory = Rc::new(Memory::new(process, version)?);
 
-        let name_data = NameManager::new(process, memory.namedata_ptr.deref_offsets(process)?);
+        let name_data = Rc::new(NameManager::new(
+            process,
+            memory.namedata_ptr.deref_offsets(process)?,
+        ));
         let level = Level::new(
             process,
             memory.clone(),
@@ -39,8 +42,8 @@ impl<'a> ZDoom<'a> {
             TArray::<u64>::new(process, memory.all_classes_ptr.deref_offsets(process)?);
 
         for class in all_classes.into_iter()? {
-            let pclass = PClass::<'a>::new(process, class.into());
-            let name = pclass.name(&name_data)?;
+            let pclass = PClass::<'a>::new(process, name_data.clone(), class.into());
+            let name = pclass.name()?.to_owned();
 
             classes.insert(name, pclass);
         }
@@ -64,13 +67,16 @@ impl<'a> ZDoom<'a> {
         Ok(())
     }
 
-    pub fn find_class(&self, name: &str) -> Option<&PClass> {
+    pub fn find_class(&self, name: &str) -> Option<&PClass<'a>> {
         self.classes.get(name)
     }
 
-    pub fn show_all_classes(&self) {
-        for (name, _class) in self.classes.iter() {
-            asr::print_message(name);
+    pub fn dump(&self) {
+        for (name, class) in self.classes.iter() {
+            let c = class
+                .show_class()
+                .unwrap_or(format!("// failed getting {name}"));
+            asr::print_message(&format!("{c}\n"));
         }
     }
 
