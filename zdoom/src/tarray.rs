@@ -48,10 +48,10 @@ impl<'a, T: CheckedBitPattern> Iterator for TArrayIterator<'a, T> {
             return None;
         }
 
-        let offset = std::mem::size_of::<T>() as u64 * self.index as u64;
+        let offset = std::mem::size_of::<T>() * self.index as usize;
         let item = self
             .process
-            .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x0, offset])
+            .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x0, offset as u64])
             .ok();
 
         self.index += 1;

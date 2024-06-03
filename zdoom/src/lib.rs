@@ -176,7 +176,6 @@ impl Memory {
                 let level_addr: Address = process
                     .read::<u64>(scan_rel(process, module_range, &s, 0x3, 0x4)?)?
                     .into();
-                asr::print_message(&format!("{level_addr:?}"));
 
                 let s = Signature::<11>::new("48 8B 84 29 ?? ?? ?? ?? 48 85 C0");
                 let players_addr_offset = process.read::<u32>(
