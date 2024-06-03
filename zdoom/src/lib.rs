@@ -126,11 +126,11 @@ impl<'a> ZDoom<'a> {
 }
 
 // disclaimer: I don't know much about the different zdoom versions work...
-// i have only tried this with two games
+// i have only tried this with a few games
 #[derive(Clone, Copy)]
 pub enum ZDoomVersion {
     Lzdoom3_82,    // Dismantled: Director's Cut
-    Gzdoom4_8_pre, // Selaco
+    Gzdoom4_8Pre,  // Selaco
     Gzdoom4_8_2,   // Snap the Sentinel
 }
 
@@ -163,7 +163,7 @@ impl Memory {
                 gameaction_addr: main_exe_addr + 0x7044E0,
                 offsets: Offsets::new(version),
             }),
-            ZDoomVersion::Gzdoom4_8_pre | ZDoomVersion::Gzdoom4_8_2 => {
+            ZDoomVersion::Gzdoom4_8Pre | ZDoomVersion::Gzdoom4_8_2 => {
                 let s = Signature::<23>::new(
                     "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
                 );
@@ -210,7 +210,7 @@ impl Offsets {
             ZDoomVersion::Lzdoom3_82 => Self {
                 level_mapname_offset: 0x2C8,
             },
-            ZDoomVersion::Gzdoom4_8_pre => Self {
+            ZDoomVersion::Gzdoom4_8Pre => Self {
                 level_mapname_offset: 0x9F8,
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {

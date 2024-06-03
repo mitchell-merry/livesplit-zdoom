@@ -24,7 +24,7 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8_pre, "Selaco.exe").expect("");
+    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8Pre, "Selaco.exe").expect("");
     // zdoom.dump();
     let mut watchers = Watchers::default();
 
