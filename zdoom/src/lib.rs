@@ -49,7 +49,13 @@ impl<'a> ZDoom<'a> {
         };
 
         loop {
-            let memory = Rc::new(Memory::new(process, version, main_module_name).expect("a"));
+            let memory = Memory::new(process, version, main_module_name);
+            if memory.is_err() {
+                fail_action().await;
+                continue
+            }
+            let memory = Rc::new(memory.unwrap());
+
             let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
             let level = Level::new(process, memory.clone(), memory.level_addr);
 
