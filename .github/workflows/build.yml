@@ -32,7 +32,7 @@ jobs:
             target/wasm32-unknown-unknown/release/selaco.wasm
             target/wasm32-unknown-unknown/release/snap_the_sentinel.wasm
           name: Latest
-          tag_name: latest
+          tag_name: ${{ github.sha }}
           body: |
             This contains the latest version of the autosplitters, from commit ${{ github.head_ref }} on branch ${{ github.sha }}.
             
