@@ -21,7 +21,7 @@ jobs:
         with:
           components: rust-src
           rust-version: stable
-          targets: wasm32-unknown-unknown
+          targets: wasm32-wasi
 
       - name: Build
         run: |
@@ -31,7 +31,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: target/wasm32-unknown-unknown/release/*.wasm
+          files: target/wasm32-wasi/release/*.wasm
           name: ${{ steps.vars.outputs.sha_short }}
           tag_name: ${{ steps.vars.outputs.sha_short }}
           body: |
@@ -53,7 +53,7 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           components: clippy
-          targets: 'wasm32-unknown-unknown'
+          targets: 'wasm32-wasi'
 
       - name: Run Clippy
         run: cargo clippy --all-features

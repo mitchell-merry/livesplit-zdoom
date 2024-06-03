@@ -33,7 +33,7 @@ impl<'a> Level<'a> {
         let c_str = self.process.read_pointer_path::<ArrayCString<128>>(
             self.address,
             asr::PointerSize::Bit64,
-            &[self.memory.offsets.level_mapname_offset, 0x0],
+            &[self.memory.offsets.level_mapname, 0x0],
         )?;
 
         let name = c_str

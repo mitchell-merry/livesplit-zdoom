@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use asr::{Address, Error, Process};
 use bytemuck::CheckedBitPattern;
+use once_cell::unsync::OnceCell;
 
 use super::{pclass::PClass, Memory};
 
@@ -43,8 +44,9 @@ pub struct Player<'a> {
     memory: Rc<Memory>,
     address: Address,
     actor_class: PClass<'a>,
-    _pos: Option<DVector3>,
-    _state: Option<PlayerState>,
+    actor: OnceCell<Address>,
+    pos: OnceCell<DVector3>,
+    state: OnceCell<PlayerState>,
 }
 
 impl<'a> Player<'a> {
@@ -59,43 +61,35 @@ impl<'a> Player<'a> {
             memory,
             address,
             actor_class,
-            _pos: None,
-            _state: None,
+            actor: OnceCell::new(),
+            pos: OnceCell::new(),
+            state: OnceCell::new(),
         }
     }
 
-    pub fn invalidate_cache(&mut self) {
-        self._pos = None;
-        self._state = None;
+    fn actor(&self) -> Result<&Address, Error> {
+        self.actor
+            .get_or_try_init(|| Ok(self.process.read::<u64>(self.address)?.into()))
     }
 
-    pub fn state(&mut self) -> Result<PlayerState, Error> {
-        if self._state.is_none() {
-            self._state = Some(self.process.read(self.address + PLAYER_STATE_OFFSET)?);
-        }
-
-        Ok(self._state.unwrap())
+    pub fn state(&self) -> Result<&PlayerState, Error> {
+        self.state
+            .get_or_try_init(|| self.process.read(self.address + PLAYER_STATE_OFFSET))
     }
 
-    pub fn pos(&mut self) -> Result<&DVector3, Option<Error>> {
-        if let Some(ref pos) = self._pos {
-            return Ok(pos);
-        }
+    pub fn pos(&self) -> Result<&DVector3, Option<Error>> {
+        self.pos.get_or_try_init(|| {
+            let pos_field = self.actor_class.fields()?.get("pos");
+            if pos_field.is_none() {
+                return Err(None);
+            }
 
-        let pos_field = self.actor_class.fields()?.get("pos");
+            let actor = self.actor()?.to_owned();
 
-        if pos_field.is_none() {
-            return Err(None);
-        }
-
-        let actor_addr: Address = self.process.read::<u64>(self.address)?.into();
-
-        let pos = DVector3::read(
-            self.process,
-            actor_addr + pos_field.unwrap().offset()?.to_owned(),
-        )?;
-        self._pos = Some(pos.clone());
-
-        Ok(self._pos.as_ref().unwrap())
+            Ok(DVector3::read(
+                self.process,
+                actor + pos_field.unwrap().offset()?.to_owned(),
+            )?)
+        })
     }
 }

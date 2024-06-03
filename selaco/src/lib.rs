@@ -24,8 +24,14 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8Pre, "Selaco.exe").expect("");
-    // zdoom.dump();
+    let (mut zdoom, _) = ZDoom::wait_try_load(
+        process,
+        ZDoomVersion::Gzdoom4_8Pre,
+        "Selaco.exe",
+        |_| Ok(()),
+    )
+    .await;
+
     let mut watchers = Watchers::default();
 
     loop {
@@ -108,7 +114,7 @@ impl Watchers {
         self.level.update(Some(level_name));
 
         let player = zdoom.player()?;
-        let playerstate = player.state()?;
+        let playerstate = player.state()?.to_owned();
         timer::set_variable("playerstate", &format!("{:?}", playerstate));
         self.playerstate.update(Some(playerstate));
 

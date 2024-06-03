@@ -1,5 +1,7 @@
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, rc::Rc};
 
+use asr::future::{next_tick, retry};
 use asr::{deep_pointer::DeepPointer, signature::Signature, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
@@ -22,31 +24,69 @@ pub struct ZDoom<'a> {
     actor_class: OnceCell<PClass<'a>>,
 
     pub level: Level<'a>,
-    pub player: Option<Player<'a>>,
-    pub gameaction: Option<GameAction>,
+    pub player: OnceCell<Player<'a>>,
+    pub gameaction: OnceCell<GameAction>,
 }
 
 impl<'a> ZDoom<'a> {
-    pub fn load(
+    pub async fn wait_try_load<T, F>(
         process: &'a Process,
         version: ZDoomVersion,
         main_module_name: &str,
-    ) -> Result<ZDoom<'a>, Error> {
-        let memory = Rc::new(Memory::new(process, version, main_module_name).expect("a"));
+        load_fn: F,
+    ) -> (ZDoom<'a>, T)
+    where
+        F: Fn(&HashMap<String, PClass<'a>>) -> Result<T, Option<Error>>,
+    {
+        let cooldown = Duration::from_secs(3);
 
-        let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
-        let level = Level::new(process, memory.clone(), memory.level_addr);
+        let fail_action = || async {
+            asr::print_message(&format!(
+                "try_load unsuccessful, waiting {}s...",
+                cooldown.as_secs()
+            ));
+            asr::future::sleep(cooldown).await;
+        };
 
-        Ok(ZDoom {
-            process,
-            memory,
-            name_data,
-            classes: OnceCell::new(),
-            actor_class: OnceCell::new(),
-            level,
-            player: None,
-            gameaction: None,
-        })
+        loop {
+            let memory = Rc::new(Memory::new(process, version, main_module_name).expect("a"));
+            let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
+            let level = Level::new(process, memory.clone(), memory.level_addr);
+
+            let zdoom = ZDoom {
+                process,
+                memory,
+                name_data,
+                level,
+                classes: OnceCell::new(),
+                actor_class: OnceCell::new(),
+                player: OnceCell::new(),
+                gameaction: OnceCell::new(),
+            };
+
+            let classes = zdoom.classes();
+            // assert that we have the Actor class, we need it for Player shenanigans
+            if classes.is_err() {
+                fail_action().await;
+                continue;
+            }
+
+            let classes = classes.unwrap();
+            if !classes.contains_key("Actor") {
+                fail_action().await;
+                continue;
+            }
+
+            let result = load_fn(&classes);
+
+            if result.is_err() {
+                fail_action().await;
+                continue;
+            }
+
+            asr::print_message("try_load successful!");
+            return (zdoom, result.unwrap());
+        }
     }
 
     pub fn classes(&self) -> Result<&HashMap<String, PClass<'a>>, Error> {
@@ -55,7 +95,12 @@ impl<'a> ZDoom<'a> {
             let all_classes = TArray::<u64>::new(self.process, self.memory.all_classes_addr);
 
             for class in all_classes.into_iter()? {
-                let pclass = PClass::<'a>::new(self.process, self.memory.clone(), self.name_data.clone(), class.into());
+                let pclass = PClass::<'a>::new(
+                    self.process,
+                    self.memory.clone(),
+                    self.name_data.clone(),
+                    class.into(),
+                );
                 let name = pclass.name()?.to_owned();
 
                 classes.insert(name, pclass);
@@ -67,8 +112,8 @@ impl<'a> ZDoom<'a> {
 
     pub fn invalidate_cache(&mut self) -> Result<(), Error> {
         self.level.invalidate_cache();
-        self.player = None;
-        self.gameaction = None;
+        self.player = OnceCell::new();
+        self.gameaction = OnceCell::new();
 
         Ok(())
     }
@@ -88,40 +133,28 @@ impl<'a> ZDoom<'a> {
         Ok(())
     }
 
-    pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Option<Error>> {
-        if self.player.is_none() {
+    pub fn player<'b>(&'b self) -> Result<&'b Player<'a>, Option<Error>> {
+        self.player.get_or_try_init(|| {
             let actor_class = self
-                .actor_class
-                .get_or_try_init(|| {
-                    let ac = self.classes()?.get("Actor");
-
-                    if ac.is_none() {
-                        asr::print_message("Unable to find the Actor class. Refreshing.");
-                        return Err(None);
-                    }
-
-                    Ok(ac.unwrap().to_owned())
-                })?
+                .classes()?
+                .get("Actor")
+                .expect("we should have asserted the Actor class was found")
                 .to_owned();
 
-            self.player = Some(Player::new(
+            Ok(Player::new(
                 self.process,
                 self.memory.clone(),
                 // 0x0 is the first index
                 self.memory.players_addr + 0x0,
                 actor_class,
-            ));
-        }
-
-        Ok(self.player.as_mut().unwrap())
+            ))
+        })
     }
 
-    pub fn gameaction(&mut self) -> Result<GameAction, Error> {
-        if self.gameaction.is_none() {
-            self.gameaction = Some(self.process.read(self.memory.gameaction_addr)?);
-        }
-
-        Ok(self.gameaction.unwrap())
+    pub fn gameaction(&self) -> Result<GameAction, Error> {
+        self.gameaction
+            .get_or_try_init(|| self.process.read(self.memory.gameaction_addr))
+            .map(|v| v.to_owned())
     }
 }
 
@@ -129,9 +162,9 @@ impl<'a> ZDoom<'a> {
 // i have only tried this with a few games
 #[derive(Clone, Copy)]
 pub enum ZDoomVersion {
-    Lzdoom3_82,    // Dismantled: Director's Cut
-    Gzdoom4_8Pre,  // Selaco
-    Gzdoom4_8_2,   // Snap the Sentinel
+    Lzdoom3_82,   // Dismantled: Director's Cut
+    Gzdoom4_8Pre, // Selaco
+    Gzdoom4_8_2,  // Snap the Sentinel
 }
 
 pub struct Memory {
@@ -202,7 +235,7 @@ impl Memory {
 
 struct Offsets {
     pclass_fields: u64,
-    level_mapname_offset: u64,
+    level_mapname: u64,
 }
 
 impl Offsets {
@@ -210,15 +243,15 @@ impl Offsets {
         match version {
             ZDoomVersion::Lzdoom3_82 => Self {
                 pclass_fields: 0x78,
-                level_mapname_offset: 0x2C8,
+                level_mapname: 0x2C8,
             },
             ZDoomVersion::Gzdoom4_8Pre => Self {
                 pclass_fields: 0x80,
-                level_mapname_offset: 0x9F8,
+                level_mapname: 0x9F8,
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {
                 pclass_fields: 0x78,
-                level_mapname_offset: 0x9D8,
+                level_mapname: 0x9D8,
             },
         }
     }

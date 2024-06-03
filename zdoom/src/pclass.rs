@@ -4,7 +4,7 @@ use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
 use once_cell::unsync::OnceCell;
 
-use super::{Memory, name_manager::NameManager, tarray::TArray};
+use super::{name_manager::NameManager, tarray::TArray, Memory};
 
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
@@ -97,7 +97,12 @@ impl<'a> PClass<'a> {
         struct_out.push_str(&format!("class {} ", self.name()?));
 
         if parent_class != Address::NULL {
-            let parent_class = PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), parent_class);
+            let parent_class = PClass::new(
+                self.process,
+                self.memory.clone(),
+                self.name_manager.clone(),
+                parent_class,
+            );
             struct_out.push_str(&format!(": public {} ", parent_class.name()?));
         }
 
@@ -141,7 +146,12 @@ impl<'a> PClass<'a> {
             .into();
 
         if parent_class != Address::NULL {
-            let parent_class = PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), parent_class);
+            let parent_class = PClass::new(
+                self.process,
+                self.memory.clone(),
+                self.name_manager.clone(),
+                parent_class,
+            );
             parent_class.debug_all_fields()?;
         }
 
