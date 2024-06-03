@@ -16,7 +16,7 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           components: rust-src
-          rust-version: nightly
+          rust-version: stable
           targets: wasm32-unknown-unknown
 
       - name: Build
@@ -27,7 +27,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: target/wasm32-unknown-unknown/release/livesplit_zdoom.wasm
+          files: |
+            target/wasm32-unknown-unknown/release/dismantled.wasm
+            target/wasm32-unknown-unknown/release/selaco.wasm
+            target/wasm32-unknown-unknown/release/snap_the_sentinel.wasm
           name: Latest
           tag_name: latest
           body: This contains the latest version of the auto splitter.
