@@ -3,7 +3,10 @@
 mod zdoom;
 
 use asr::{future::next_tick, timer, watcher::Watcher, Error, Process};
-use zdoom::{player::DVector3, GameAction, ZDoom, ZDoomVersion};
+use zdoom::{
+    player::{DVector3, PlayerState},
+    GameAction, ZDoom, ZDoomVersion,
+};
 
 asr::async_main!(nightly);
 
@@ -88,36 +91,78 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
         //     }
         // }
 
+        // and this is Selaco
+
+        if let Some(ref level_name) = watchers.level.pair
+            && let Some(ref player_pos) = watchers.player_pos.pair
+            && let Some(ref gameaction) = watchers.gameaction.pair
+            && let Some(playerstate) = watchers.playerstate.pair
+        {
+            if timer::state() == timer::TimerState::NotRunning {
+                if level_name.current == "SE_01a"
+                    && gameaction.old == GameAction::NewGame
+                    && gameaction.current != GameAction::NewGame
+                {
+                    timer::start();
+                }
+            }
+
+            if timer::state() == timer::TimerState::Running {
+                if gameaction.old != gameaction.current {
+                    asr::print_message(&format!("{:?}, {:?}", gameaction.old, gameaction.current))
+                }
+
+                // isLoading
+                if gameaction.old == GameAction::Nothing
+                    && gameaction.current == GameAction::Completed
+                    || playerstate.old == PlayerState::Dead
+                        && playerstate.current == PlayerState::Enter
+                {
+                    timer::pause_game_time();
+                }
+
+                if gameaction.old == GameAction::WorldDone
+                    && gameaction.current == GameAction::Nothing
+                    || playerstate.old == PlayerState::Enter
+                        && playerstate.current == PlayerState::Live
+                {
+                    timer::resume_game_time();
+                }
+            }
+        }
+
         next_tick().await;
     }
 }
 
 #[derive(Default)]
 struct Watchers {
-    level: Watcher<String>,
-    player_pos: Watcher<DVector3>,
     gameaction: Watcher<GameAction>,
+    level: Watcher<String>,
+    playerstate: Watcher<PlayerState>,
+    player_pos: Watcher<DVector3>,
 }
 
 impl Watchers {
     fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
+        let gameaction = zdoom.gameaction().unwrap_or_default();
+        timer::set_variable("gameaction", &format!("{:?}", gameaction));
+        self.gameaction.update(Some(gameaction));
+
         let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();
         timer::set_variable("map", level_name.as_str());
         self.level.update(Some(level_name));
 
-        let player_pos = zdoom
-            .player()?
-            .pos()
-            .map(|v| v.to_owned())
-            .unwrap_or_default();
+        let player = zdoom.player()?;
+        let playerstate = player.state()?;
+        timer::set_variable("playerstate", &format!("{:?}", playerstate));
+        self.playerstate.update(Some(playerstate));
+
+        let player_pos = player.pos().map(|v| v.to_owned()).unwrap_or_default();
         timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
-
-        let gameaction = zdoom.gameaction().unwrap_or_default();
-        timer::set_variable("gameaction", &format!("{:?}", gameaction));
-        self.gameaction.update(Some(gameaction));
 
         Ok(())
     }

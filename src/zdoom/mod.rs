@@ -20,7 +20,7 @@ pub struct ZDoom<'a> {
     name_data: Rc<NameManager<'a>>,
     classes: OnceCell<HashMap<String, PClass<'a>>>,
     actor_class: OnceCell<PClass<'a>>,
-    
+
     pub level: Level<'a>,
     pub player: Option<Player<'a>>,
     pub gameaction: Option<GameAction>,
@@ -90,23 +90,25 @@ impl<'a> ZDoom<'a> {
 
     pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Option<Error>> {
         if self.player.is_none() {
-            let actor_class = self.actor_class.get_or_try_init(|| {
-                let ac = self
-                    .classes()?
-                    .get("Actor");
+            let actor_class = self
+                .actor_class
+                .get_or_try_init(|| {
+                    let ac = self.classes()?.get("Actor");
 
-                if ac.is_none() {
-                    asr::print_message("Unable to find the Actor class. Refreshing.");
-                    return Err(None)
-                }
+                    if ac.is_none() {
+                        asr::print_message("Unable to find the Actor class. Refreshing.");
+                        return Err(None);
+                    }
 
-                Ok(ac.unwrap().to_owned())
-            })?.to_owned();
+                    Ok(ac.unwrap().to_owned())
+                })?
+                .to_owned();
 
             self.player = Some(Player::new(
                 self.process,
                 self.memory.clone(),
-                self.process.read::<u64>(self.memory.players_addr)?.into(),
+                // 0x0 is the first index
+                self.memory.players_addr + 0x0,
                 actor_class,
             ));
         }
@@ -127,9 +129,9 @@ impl<'a> ZDoom<'a> {
 // i have only tried this with two games
 #[derive(Clone, Copy)]
 pub enum ZDoomVersion {
-    Lzdoom3_82,  // Dismantled: Director's Cut
+    Lzdoom3_82,    // Dismantled: Director's Cut
     Gzdoom4_8_pre, // Selaco
-    Gzdoom4_8_2, // Snap the Sentinel
+    Gzdoom4_8_2,   // Snap the Sentinel
 }
 
 pub struct Memory {
@@ -214,7 +216,7 @@ impl Offsets {
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {
                 level_mapname_offset: 0x9D8,
-            }
+            },
         }
     }
 }
