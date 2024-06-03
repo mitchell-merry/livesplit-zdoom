@@ -35,12 +35,12 @@ jobs:
             target/wasm32-unknown-unknown/release/dismantled.wasm
             target/wasm32-unknown-unknown/release/selaco.wasm
             target/wasm32-unknown-unknown/release/snap_the_sentinel.wasm
-          name: Latest
+          name: ${{ steps.vars.outputs.sha_short }}
           tag_name: ${{ steps.vars.outputs.sha_short }}
           body: |
-            I AM TESTIN GTHIS!!!
+            This is the release version of the autosplitters in this repo at ${{ github.sha }}.
             
-            They are updated idempotently, and a link to one will last as long as this repo is active.
+            You can access the latest version of all the autosplitters at `https://github.com/mitchell-merry/livesplit-zdoom/releases/download/latest/<name>.wasm`
             
             For example, you will always find the latest version of Dismantled's autosplitter at:
             https://github.com/mitchell-merry/livesplit-zdoom/releases/download/latest/dismantled.wasm.
