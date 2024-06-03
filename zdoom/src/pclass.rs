@@ -4,7 +4,7 @@ use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
 use once_cell::unsync::OnceCell;
 
-use super::{name_manager::NameManager, tarray::TArray};
+use super::{Memory, name_manager::NameManager, tarray::TArray};
 
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
@@ -12,7 +12,6 @@ const PFIELD_TYPE: u64 = 0x40;
 const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
-const PCLASS_FIELDS: u64 = 0x80;
 const PCLASS_PTYPE: u64 = 0x88;
 
 const PTYPE_SIZE: u64 = 0xC;
@@ -23,6 +22,7 @@ const PTYPE_DESCRIPTIVE_NAME: u64 = 0x48;
 #[derive(Clone)]
 pub struct PClass<'a> {
     process: &'a Process,
+    memory: Rc<Memory>,
     name_manager: Rc<NameManager<'a>>,
     address: Address,
 
@@ -34,12 +34,14 @@ pub struct PClass<'a> {
 impl<'a> PClass<'a> {
     pub fn new(
         process: &'a Process,
+        memory: Rc<Memory>,
         name_manager: Rc<NameManager<'a>>,
         address: Address,
     ) -> PClass<'a> {
         PClass {
             process,
             name_manager,
+            memory,
             address,
 
             name: OnceCell::new(),
@@ -71,9 +73,8 @@ impl<'a> PClass<'a> {
         self.fields.get_or_try_init(|| {
             let mut fields = HashMap::new();
 
-            let fields_addr = self.address.add(PCLASS_FIELDS);
+            let fields_addr = self.address.add(self.memory.offsets.pclass_fields);
             let field_addrs = TArray::<u64>::new(self.process, fields_addr);
-            // asr::print_message(&format!("{:?}", self.address));
 
             for field_addr in field_addrs.into_iter()? {
                 let field =
@@ -96,7 +97,7 @@ impl<'a> PClass<'a> {
         struct_out.push_str(&format!("class {} ", self.name()?));
 
         if parent_class != Address::NULL {
-            let parent_class = PClass::new(self.process, self.name_manager.clone(), parent_class);
+            let parent_class = PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), parent_class);
             struct_out.push_str(&format!(": public {} ", parent_class.name()?));
         }
 
@@ -140,13 +141,11 @@ impl<'a> PClass<'a> {
             .into();
 
         if parent_class != Address::NULL {
-            let parent_class = PClass::new(self.process, self.name_manager.clone(), parent_class);
+            let parent_class = PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), parent_class);
             parent_class.debug_all_fields()?;
         }
 
-        asr::print_message(&format!("{} fields:", self.name()?));
-
-        let fields_addr = self.address.add(PCLASS_FIELDS);
+        let fields_addr = self.address.add(self.memory.offsets.pclass_fields);
 
         let field_addrs = TArray::<u64>::new(self.process, fields_addr);
 

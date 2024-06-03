@@ -88,7 +88,7 @@ impl<'a> Player<'a> {
             return Err(None);
         }
 
-        let actor_addr: Address = self.process.read::<u64>(self.memory.players_addr)?.into();
+        let actor_addr: Address = self.process.read::<u64>(self.address)?.into();
 
         let pos = DVector3::read(
             self.process,

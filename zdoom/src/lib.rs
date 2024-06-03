@@ -55,7 +55,7 @@ impl<'a> ZDoom<'a> {
             let all_classes = TArray::<u64>::new(self.process, self.memory.all_classes_addr);
 
             for class in all_classes.into_iter()? {
-                let pclass = PClass::<'a>::new(self.process, self.name_data.clone(), class.into());
+                let pclass = PClass::<'a>::new(self.process, self.memory.clone(), self.name_data.clone(), class.into());
                 let name = pclass.name()?.to_owned();
 
                 classes.insert(name, pclass);
@@ -157,7 +157,7 @@ impl Memory {
             // yes these should be signatures or something. TODO
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
                 namedata_addr: main_exe_addr + 0x9F8E10,
-                players_addr: main_exe_addr + 0x7043C0,
+                players_addr: main_exe_addr + 0x9F3CD0,
                 all_classes_addr: main_exe_addr + 0x9F8980,
                 level_addr: main_exe_addr + 0x9F5B78,
                 gameaction_addr: main_exe_addr + 0x7044E0,
@@ -201,6 +201,7 @@ impl Memory {
 }
 
 struct Offsets {
+    pclass_fields: u64,
     level_mapname_offset: u64,
 }
 
@@ -208,12 +209,15 @@ impl Offsets {
     fn new(version: ZDoomVersion) -> Self {
         match version {
             ZDoomVersion::Lzdoom3_82 => Self {
+                pclass_fields: 0x78,
                 level_mapname_offset: 0x2C8,
             },
             ZDoomVersion::Gzdoom4_8Pre => Self {
+                pclass_fields: 0x80,
                 level_mapname_offset: 0x9F8,
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {
+                pclass_fields: 0x78,
                 level_mapname_offset: 0x9D8,
             },
         }
