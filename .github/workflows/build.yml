@@ -31,10 +31,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            target/wasm32-unknown-unknown/release/dismantled.wasm
-            target/wasm32-unknown-unknown/release/selaco.wasm
-            target/wasm32-unknown-unknown/release/snap_the_sentinel.wasm
+          files: target/wasm32-unknown-unknown/release/*.wasm
           name: ${{ steps.vars.outputs.sha_short }}
           tag_name: ${{ steps.vars.outputs.sha_short }}
           body: |
