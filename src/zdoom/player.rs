@@ -50,19 +50,24 @@ impl<'a> Player<'a> {
         self._pos = None;
     }
 
-    pub fn pos(&mut self) -> Result<&DVector3, Error> {
+    pub fn pos(&mut self) -> Result<&DVector3, Option<Error>> {
         if let Some(ref pos) = self._pos {
             return Ok(pos);
+        }
+
+        let pos_field = self
+            .actor_class
+            .fields()?
+            .get("pos");
+
+        if pos_field.is_none() {
+            return Err(None)
         }
 
         let pos = DVector3::read(
             self.process,
             self.address
-                + self
-                    .actor_class
-                    .fields()?
-                    .get("pos")
-                    .unwrap_or_else(|| panic!("can't find the position field on the actor"))
+                + pos_field.unwrap()
                     .offset()?
                     .to_owned(),
         )?;

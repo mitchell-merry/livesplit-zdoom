@@ -25,7 +25,7 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Error> {
-    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8_2, "Selaco.exe").expect("");
+    let mut zdoom = ZDoom::load(process, ZDoomVersion::Gzdoom4_8_pre, "Selaco.exe").expect("");
     // zdoom.dump();
     let mut watchers = Watchers::default();
 
@@ -100,7 +100,7 @@ struct Watchers {
 }
 
 impl Watchers {
-    fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Error> {
+    fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
         let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();

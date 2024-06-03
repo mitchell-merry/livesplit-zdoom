@@ -17,8 +17,10 @@ pub mod tarray;
 pub struct ZDoom<'a> {
     process: &'a Process,
     memory: Rc<Memory>,
-    pub name_data: Rc<NameManager<'a>>,
+    name_data: Rc<NameManager<'a>>,
     classes: OnceCell<HashMap<String, PClass<'a>>>,
+    actor_class: OnceCell<PClass<'a>>,
+    
     pub level: Level<'a>,
     pub player: Option<Player<'a>>,
     pub gameaction: Option<GameAction>,
@@ -40,6 +42,7 @@ impl<'a> ZDoom<'a> {
             memory,
             name_data,
             classes: OnceCell::new(),
+            actor_class: OnceCell::new(),
             level,
             player: None,
             gameaction: None,
@@ -85,13 +88,21 @@ impl<'a> ZDoom<'a> {
         Ok(())
     }
 
-    pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Error> {
+    pub fn player<'b>(&'b mut self) -> Result<&'b mut Player<'a>, Option<Error>> {
         if self.player.is_none() {
-            let actor_class = self
-                .classes()?
-                .get("Actor")
-                .unwrap_or_else(|| panic!("can't find the actor class"))
-                .to_owned();
+            let actor_class = self.actor_class.get_or_try_init(|| {
+                let ac = self
+                    .classes()?
+                    .get("Actor");
+
+                if ac.is_none() {
+                    asr::print_message("Unable to find the Actor class. Refreshing.");
+                    return Err(None)
+                }
+
+                Ok(ac.unwrap().to_owned())
+            })?.to_owned();
+
             self.player = Some(Player::new(
                 self.process,
                 self.memory.clone(),
@@ -117,6 +128,7 @@ impl<'a> ZDoom<'a> {
 #[derive(Clone, Copy)]
 pub enum ZDoomVersion {
     Lzdoom3_82,  // Dismantled: Director's Cut
+    Gzdoom4_8_pre, // Selaco
     Gzdoom4_8_2, // Snap the Sentinel
 }
 
@@ -127,7 +139,7 @@ pub struct Memory {
     level_addr: Address,
     gameaction_addr: Address,
 
-    level_mapname_offset: u64,
+    offsets: Offsets,
 }
 
 impl Memory {
@@ -147,9 +159,9 @@ impl Memory {
                 all_classes_addr: main_exe_addr + 0x9F8980,
                 level_addr: main_exe_addr + 0x9F5B78,
                 gameaction_addr: main_exe_addr + 0x7044E0,
-                level_mapname_offset: 0x2C8,
+                offsets: Offsets::new(version),
             }),
-            ZDoomVersion::Gzdoom4_8_2 => {
+            ZDoomVersion::Gzdoom4_8_pre | ZDoomVersion::Gzdoom4_8_2 => {
                 let s = Signature::<23>::new(
                     "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
                 );
@@ -180,8 +192,28 @@ impl Memory {
                     all_classes_addr,
                     level_addr,
                     gameaction_addr,
-                    level_mapname_offset: 0x9F8,
+                    offsets: Offsets::new(version),
                 })
+            }
+        }
+    }
+}
+
+struct Offsets {
+    level_mapname_offset: u64,
+}
+
+impl Offsets {
+    fn new(version: ZDoomVersion) -> Self {
+        match version {
+            ZDoomVersion::Lzdoom3_82 => Self {
+                level_mapname_offset: 0x2C8,
+            },
+            ZDoomVersion::Gzdoom4_8_pre => Self {
+                level_mapname_offset: 0x9F8,
+            },
+            ZDoomVersion::Gzdoom4_8_2 => Self {
+                level_mapname_offset: 0x9D8,
             }
         }
     }
