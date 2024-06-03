@@ -33,7 +33,13 @@ jobs:
             target/wasm32-unknown-unknown/release/snap_the_sentinel.wasm
           name: Latest
           tag_name: latest
-          body: This contains the latest version of the auto splitter.
+          body: |
+            This contains the latest version of the autosplitters, from commit ${{ github.head_ref }} on branch ${{ github.sha }}.
+            
+            They are updated idempotently, and a link to one will last as long as this repo is active.
+            
+            For example, you will always find the latest version of Dismantled's autosplitter at:
+            https://github.com/mitchell-merry/livesplit-zdoom/releases/download/latest/dismantled.wasm.
 
   clippy:
     name: Check clippy lints
