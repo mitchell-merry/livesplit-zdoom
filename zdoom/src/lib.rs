@@ -52,7 +52,7 @@ impl<'a> ZDoom<'a> {
             let memory = Memory::new(process, version, main_module_name);
             if memory.is_err() {
                 fail_action().await;
-                continue
+                continue;
             }
             let memory = Rc::new(memory.unwrap());
 
@@ -129,7 +129,8 @@ impl<'a> ZDoom<'a> {
     }
 
     pub fn dump(&self) -> Result<(), Error> {
-        asr::print_message(r"#include <cstdint>
+        asr::print_message(
+            r"#include <cstdint>
 
 template <class T>
 class TArray
@@ -138,7 +139,8 @@ class TArray
 	unsigned int Count;
 	unsigned int Most;
 };
-");
+",
+        );
         for (name, class) in self.classes()?.iter() {
             let c = class
                 .show_class()
@@ -235,7 +237,9 @@ impl Memory {
                         + 0x4,
                 )?;
 
-                let s = Signature::<17>::new("49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84");
+                let s = Signature::<17>::new(
+                    "49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84",
+                );
                 let all_classes_addr = scan_rel(process, module_range, &s, 0x7, 0x4)?;
 
                 Ok(Memory {

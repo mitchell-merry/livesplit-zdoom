@@ -57,15 +57,14 @@ impl<'a> PClass<'a> {
     }
 
     pub fn size(&self) -> Result<&u32, Error> {
-        self.size.get_or_try_init(|| self.process.read(self.address + PCLASS_SIZE))
+        self.size
+            .get_or_try_init(|| self.process.read(self.address + PCLASS_SIZE))
     }
 
     pub fn name(&self) -> Result<&String, Error> {
         self.name.get_or_try_init(|| {
             self.name_manager
-                .get_chars(self.process.read::<u32>(
-                    self.address + PCLASS_TYPENAME,
-                )?)
+                .get_chars(self.process.read::<u32>(self.address + PCLASS_TYPENAME)?)
         })
     }
 
@@ -85,8 +84,12 @@ impl<'a> PClass<'a> {
             let field_addrs = TArray::<u64>::new(self.process, fields_addr);
 
             for field_addr in field_addrs.into_iter()? {
-                let field =
-                    PField::new(&self.process, self.memory.clone(), self.name_manager.clone(), field_addr.into());
+                let field = PField::new(
+                    &self.process,
+                    self.memory.clone(),
+                    self.name_manager.clone(),
+                    field_addr.into(),
+                );
                 fields.insert(field.name().map(|f| f.to_owned())?, field);
             }
 
@@ -147,14 +150,18 @@ impl<'a> PClass<'a> {
                 ""
             };
 
-            let pointer_modifier = if ptype_flags.contains(TypeFlags::Pointer) || ptype_flags.contains(TypeFlags::ClassPointer) || ptype_flags.contains(TypeFlags::ObjectPointer) {
+            let pointer_modifier = if ptype_flags.contains(TypeFlags::Pointer)
+                || ptype_flags.contains(TypeFlags::ClassPointer)
+                || ptype_flags.contains(TypeFlags::ObjectPointer)
+            {
                 "*"
             } else {
                 ""
             };
 
             let ptype_name = ptype.name()?;
-            let n = PType::name_as_field_type(ptype_name.to_owned()).unwrap_or(ptype_name.to_owned());
+            let n =
+                PType::name_as_field_type(ptype_name.to_owned()).unwrap_or(ptype_name.to_owned());
 
             struct_out.push_str(&format!(
                 "  {}{}{} {}{}; // raw type name: {ptype_name}, offset: 0x{:X}, size: 0x{:X}, align: 0x{:X} ({:?}, {:?})\n",
@@ -243,9 +250,17 @@ impl<'a> PField<'a> {
 
     pub fn class(&self) -> Result<&PClass<'a>, Error> {
         self.class.get_or_try_init(|| {
-           let class_addr: Address = self.process.read::<u64>(self.address + DOBJECT_CLASS)?.into();
+            let class_addr: Address = self
+                .process
+                .read::<u64>(self.address + DOBJECT_CLASS)?
+                .into();
 
-            Ok(PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), class_addr))
+            Ok(PClass::new(
+                self.process,
+                self.memory.clone(),
+                self.name_manager.clone(),
+                class_addr,
+            ))
         })
     }
 
@@ -405,7 +420,8 @@ impl<'a> PType<'a> {
     }
 
     pub fn name_as_field_type(name: String) -> Result<String, regex::Error> {
-        let generic = Regex::new(r"^(?<outer_type>.+?)<(?<inner_type>.+?)>(?<elements>\[\d+\])?$").unwrap();
+        let generic =
+            Regex::new(r"^(?<outer_type>.+?)<(?<inner_type>.+?)>(?<elements>\[\d+\])?$").unwrap();
 
         return if let Some(captures) = generic.captures(name.as_str()) {
             let outer_type = (&captures["outer_type"]).to_owned();
@@ -436,8 +452,9 @@ impl<'a> PType<'a> {
                 "UInt1" => "uint8_t",
                 "UInt2" => "uint16_t",
                 "UInt4" => "uint32_t",
-                x => x
-            }.to_owned())
-        }
+                x => x,
+            }
+            .to_owned())
+        };
     }
 }

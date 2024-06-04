@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
+use crate::name_manager::NameManager;
 use asr::{Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
-use crate::name_manager::NameManager;
 
 use super::{pclass::PClass, Memory};
 
@@ -99,18 +99,27 @@ impl<'a> Player<'a> {
 
     pub fn dump_inventories(&self) -> Result<(), Option<Error>> {
         let actor = self.actor()?.to_owned();
-        let inv_offset = self.actor_class.fields()?.get("Inv").ok_or(None)?.offset()?.to_owned();
+        let inv_offset = self
+            .actor_class
+            .fields()?
+            .get("Inv")
+            .ok_or(None)?
+            .offset()?
+            .to_owned();
         let mut inv: Address = self.process.read::<u64>(actor + inv_offset)?.into();
         while inv != Address::NULL {
             let class = self.process.read::<u64>(inv + 0x8)?.into();
-            let class = PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), class);
+            let class = PClass::new(
+                self.process,
+                self.memory.clone(),
+                self.name_manager.clone(),
+                class,
+            );
 
             let name = class.name()?;
             asr::print_message(&format!("{name}, {inv}"));
 
-            if name == "Objectives" {
-
-            }
+            if name == "Objectives" {}
 
             inv = self.process.read::<u64>(inv + inv_offset)?.into();
         }
