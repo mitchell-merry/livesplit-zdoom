@@ -129,10 +129,21 @@ impl<'a> ZDoom<'a> {
     }
 
     pub fn dump(&self) -> Result<(), Error> {
+        asr::print_message(r"#include <cstdint>
+
+template <class T>
+class TArray
+{
+    T* Array;
+	unsigned int Count;
+	unsigned int Most;
+};
+");
         for (name, class) in self.classes()?.iter() {
             let c = class
                 .show_class()
                 .unwrap_or(format!("// failed getting {name}"));
+
             asr::print_message(&format!("{c}\n"));
         }
 
@@ -224,13 +235,13 @@ impl Memory {
                         + 0x4,
                 )?;
 
-                let s = Signature::<17>::new("48 8B 05 ?? ?? ?? ?? 48 8B 1C F0 48 8B C3 48 85 DB");
-                let all_classes_addr = scan_rel(process, module_range, &s, 0x3, 0x4)?;
+                // let s = Signature::<17>::new("48 8B 05 ?? ?? ?? ?? 48 8B 1C F0 48 8B C3 48 85 DB");
+                // let all_classes_addr = scan_rel(process, module_range, &s, 0x3, 0x4)?;
 
                 Ok(Memory {
                     namedata_addr,
                     players_addr: main_exe_addr + players_addr_offset,
-                    all_classes_addr,
+                    all_classes_addr: main_exe_addr + 0x122F268,
                     level_addr,
                     gameaction_addr,
                     offsets: Offsets::new(version),

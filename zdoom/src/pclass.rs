@@ -3,14 +3,18 @@ use std::{cmp::Ordering, collections::HashMap, iter::Once, rc::Rc};
 use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
 use once_cell::unsync::OnceCell;
+use regex::Regex;
 
 use super::{name_manager::NameManager, tarray::TArray, Memory};
+
+const DOBJECT_CLASS: u64 = 0x8;
 
 const PFIELD_NAME: u64 = 0x28;
 const PFIELD_OFFSET: u64 = 0x38;
 const PFIELD_TYPE: u64 = 0x40;
 const PFIELD_FLAGS: u64 = 0x48;
 
+const PCLASS_SIZE: u64 = 0x30;
 const PCLASS_TYPENAME: u64 = 0x38;
 const PCLASS_PTYPE: u64 = 0x90;
 
@@ -26,6 +30,7 @@ pub struct PClass<'a> {
     name_manager: Rc<NameManager<'a>>,
     address: Address,
 
+    size: OnceCell<u32>,
     name: OnceCell<String>,
     ptype: OnceCell<PType<'a>>,
     fields: OnceCell<HashMap<String, PField<'a>>>, // does not contain fields of superclasses
@@ -44,19 +49,22 @@ impl<'a> PClass<'a> {
             memory,
             address,
 
+            size: OnceCell::new(),
             name: OnceCell::new(),
             ptype: OnceCell::new(),
             fields: OnceCell::new(),
         }
     }
 
+    pub fn size(&self) -> Result<&u32, Error> {
+        self.size.get_or_try_init(|| self.process.read(self.address + PCLASS_SIZE))
+    }
+
     pub fn name(&self) -> Result<&String, Error> {
         self.name.get_or_try_init(|| {
             self.name_manager
-                .get_chars(self.process.read_pointer_path::<u32>(
-                    self.address,
-                    asr::PointerSize::Bit64,
-                    &[PCLASS_TYPENAME],
+                .get_chars(self.process.read::<u32>(
+                    self.address + PCLASS_TYPENAME,
                 )?)
         })
     }
@@ -78,7 +86,7 @@ impl<'a> PClass<'a> {
 
             for field_addr in field_addrs.into_iter()? {
                 let field =
-                    PField::new(&self.process, self.name_manager.clone(), field_addr.into());
+                    PField::new(&self.process, self.memory.clone(), self.name_manager.clone(), field_addr.into());
                 fields.insert(field.name().map(|f| f.to_owned())?, field);
             }
 
@@ -87,7 +95,12 @@ impl<'a> PClass<'a> {
     }
 
     pub fn show_class(&self) -> Result<String, Error> {
+        let regex_struct = Regex::new(r"(Native)?Struct<(?<name>.+?)>").unwrap();
+
         let mut struct_out = String::new();
+
+        let class_size = self.size()?.to_owned();
+        struct_out.push_str(&format!("// size: 0x{class_size:X}\n"));
 
         let parent_class: Address = self
             .process
@@ -118,65 +131,49 @@ impl<'a> PClass<'a> {
         sorted_fields.sort();
 
         for field in sorted_fields {
-            let modifier = if field.flags()?.contains(PFieldFlags::Static) {
+            let ptype = field.ptype()?;
+            let field_flags = field.flags()?;
+            let modifier = if field_flags.contains(PFieldFlags::Static) {
                 "static "
             } else {
                 ""
             };
+
+            let class = field.class()?;
+            let ptype_flags = ptype.flags()?;
+            let struct_modifier = if ptype_flags.contains(TypeFlags::Container) {
+                "struct "
+            } else {
+                ""
+            };
+
+            let pointer_modifier = if ptype_flags.contains(TypeFlags::Pointer) || ptype_flags.contains(TypeFlags::ClassPointer) || ptype_flags.contains(TypeFlags::ObjectPointer) {
+                "*"
+            } else {
+                ""
+            };
+
+            let ptype_name = ptype.name()?;
+            let n = PType::name_as_field_type(ptype_name.to_owned()).unwrap_or(ptype_name.to_owned());
+
             struct_out.push_str(&format!(
-                "  {}{} {}; // offset: 0x{:X}, size: 0x{:X}, align: 0x{:X}\n",
+                "  {}{}{} {}{}; // raw type name: {ptype_name}, offset: 0x{:X}, size: 0x{:X}, align: 0x{:X} ({:?}, {:?})\n",
                 modifier,
-                field.ptype()?.name()?,
+                struct_modifier,
+                n,
+                pointer_modifier,
                 field.name()?,
                 field.offset()?,
                 field.ptype()?.size()?,
                 field.ptype()?.align()?,
+                field_flags,
+                ptype_flags,
             ))
         }
 
-        struct_out.push('}');
+        struct_out.push_str("};");
 
         Ok(struct_out)
-    }
-
-    pub fn debug_all_fields(&self) -> Result<(), Error> {
-        let parent_class: Address = self
-            .process
-            .read_pointer_path::<u64>(self.address, asr::PointerSize::Bit64, &[0x0])?
-            .into();
-
-        if parent_class != Address::NULL {
-            let parent_class = PClass::new(
-                self.process,
-                self.memory.clone(),
-                self.name_manager.clone(),
-                parent_class,
-            );
-            parent_class.debug_all_fields()?;
-        }
-
-        let fields_addr = self.address.add(self.memory.offsets.pclass_fields);
-
-        let field_addrs = TArray::<u64>::new(self.process, fields_addr);
-
-        for field_addr in field_addrs.into_iter()? {
-            let field = PField::new(self.process, self.name_manager.clone(), field_addr.into());
-            let flags = field.flags()?;
-            let is_static = match flags.contains(PFieldFlags::Static) {
-                true => " static",
-                false => "       ",
-            };
-
-            asr::print_message(&format!(
-                "  => {is_static} 0x{:X}  {}: {} [{:?}]",
-                field.offset()?,
-                field.name()?,
-                field.ptype()?.name()?,
-                flags
-            ));
-        }
-
-        Ok(())
     }
 }
 
@@ -213,9 +210,11 @@ bitflags! {
 #[derive(Clone)]
 pub struct PField<'a> {
     process: &'a Process,
+    memory: Rc<Memory>,
     name_manager: Rc<NameManager<'a>>,
     address: Address,
 
+    class: OnceCell<PClass<'a>>,
     name: OnceCell<String>,
     offset: OnceCell<u32>,
     ptype: OnceCell<PType<'a>>,
@@ -225,18 +224,29 @@ pub struct PField<'a> {
 impl<'a> PField<'a> {
     pub fn new(
         process: &'a Process,
+        memory: Rc<Memory>,
         name_manager: Rc<NameManager<'a>>,
         address: Address,
     ) -> PField<'a> {
         PField {
             process,
+            memory,
             name_manager,
             address,
+            class: OnceCell::new(),
             name: OnceCell::new(),
             offset: OnceCell::new(),
             ptype: OnceCell::new(),
             flags: OnceCell::new(),
         }
+    }
+
+    pub fn class(&self) -> Result<&PClass<'a>, Error> {
+        self.class.get_or_try_init(|| {
+           let class_addr: Address = self.process.read::<u64>(self.address + DOBJECT_CLASS)?.into();
+
+            Ok(PClass::new(self.process, self.memory.clone(), self.name_manager.clone(), class_addr))
+        })
     }
 
     pub fn name(&self) -> Result<&String, Error> {
@@ -392,5 +402,42 @@ impl<'a> PType<'a> {
 
             Ok(b)
         })
+    }
+
+    pub fn name_as_field_type(name: String) -> Result<String, regex::Error> {
+        let generic = Regex::new(r"^(?<outer_type>.+?)<(?<inner_type>.+?)>(?<elements>\[\d+\])?$").unwrap();
+
+        return if let Some(captures) = generic.captures(name.as_str()) {
+            let outer_type = (&captures["outer_type"]).to_owned();
+            let elements = captures.name("elements");
+            let mut inner_type = PType::name_as_field_type(captures["inner_type"].to_owned())?;
+            if let Some(elements) = elements {
+                inner_type = format!("{}{}", inner_type, elements.as_str());
+            }
+
+            Ok(match outer_type.as_str() {
+                "DynArray" => format!("TArray<{inner_type}>"),
+                "Struct" => inner_type,
+                "NativeStruct" => inner_type,
+                "Class" => inner_type,
+                "Pointer" => inner_type,
+                "ClassPointer" => inner_type,
+                _ => format!("{outer_type}<{inner_type}>"),
+            })
+        } else {
+            Ok(match name.as_str() {
+                "Bool" => "bool",
+                "Float4" => "float",
+                "Float8" => "double",
+                "String" => "char*",
+                "SInt1" => "int8_t",
+                "SInt2" => "int16_t",
+                "SInt4" => "int32_t",
+                "UInt1" => "uint8_t",
+                "UInt2" => "uint16_t",
+                "UInt4" => "uint32_t",
+                x => x
+            }.to_owned())
+        }
     }
 }

@@ -31,6 +31,7 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
         |_| Ok(()),
     )
     .await;
+    let _ = zdoom.dump();
     if let Ok(player) = zdoom.player() {
         let _ = player.dump_inventories();
     }
