@@ -18,9 +18,9 @@ pub mod tarray;
 
 pub struct ZDoom<'a> {
     process: &'a Process,
-    memory: Rc<Memory>,
-    name_data: Rc<NameManager<'a>>,
-    classes: OnceCell<HashMap<String, PClass<'a>>>,
+    pub memory: Rc<Memory>,
+    pub name_data: Rc<NameManager<'a>>,
+    pub classes: OnceCell<HashMap<String, PClass<'a>>>,
     actor_class: OnceCell<PClass<'a>>,
 
     pub level: Level<'a>,
@@ -237,7 +237,7 @@ impl Memory {
                         + 0x4,
                 )?;
 
-                let s = Signature::<17>::new(
+                let s = Signature::<26>::new(
                     "49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84",
                 );
                 let all_classes_addr = scan_rel(process, module_range, &s, 0x7, 0x4)?;
