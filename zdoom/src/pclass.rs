@@ -12,7 +12,7 @@ const PFIELD_TYPE: u64 = 0x40;
 const PFIELD_FLAGS: u64 = 0x48;
 
 const PCLASS_TYPENAME: u64 = 0x38;
-const PCLASS_PTYPE: u64 = 0x88;
+const PCLASS_PTYPE: u64 = 0x90;
 
 const PTYPE_SIZE: u64 = 0xC;
 const PTYPE_ALIGN: u64 = 0x10;
@@ -339,7 +339,7 @@ bitflags! {
 #[derive(Clone)]
 pub struct PType<'a> {
     process: &'a Process,
-    address: Address,
+    pub address: Address,
 
     size: OnceCell<u32>,
     align: OnceCell<u32>,
@@ -348,7 +348,7 @@ pub struct PType<'a> {
 }
 
 impl<'a> PType<'a> {
-    fn new(process: &'a Process, address: Address) -> PType {
+    pub fn new(process: &'a Process, address: Address) -> PType {
         PType {
             process,
             address,
@@ -359,17 +359,17 @@ impl<'a> PType<'a> {
         }
     }
 
-    fn size(&self) -> Result<&u32, Error> {
+    pub fn size(&self) -> Result<&u32, Error> {
         self.size
             .get_or_try_init(|| self.process.read::<u32>(self.address.add(PTYPE_SIZE)))
     }
 
-    fn align(&self) -> Result<&u32, Error> {
+    pub fn align(&self) -> Result<&u32, Error> {
         self.align
             .get_or_try_init(|| self.process.read::<u32>(self.address.add(PTYPE_ALIGN)))
     }
 
-    fn flags(&self) -> Result<&TypeFlags, Error> {
+    pub fn flags(&self) -> Result<&TypeFlags, Error> {
         self.flags.get_or_try_init(|| {
             Ok(TypeFlags::from_bits_truncate(
                 self.process.read(self.address + PTYPE_FLAGS)?,
@@ -377,7 +377,7 @@ impl<'a> PType<'a> {
         })
     }
 
-    fn name(&self) -> Result<&String, Error> {
+    pub fn name(&self) -> Result<&String, Error> {
         self.name.get_or_try_init(|| {
             let c_str = self.process.read_pointer_path::<ArrayCString<128>>(
                 self.address,

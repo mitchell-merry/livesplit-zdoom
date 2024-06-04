@@ -150,6 +150,7 @@ impl<'a> ZDoom<'a> {
             Ok(Player::new(
                 self.process,
                 self.memory.clone(),
+                self.name_data.clone(),
                 // 0x0 is the first index
                 self.memory.players_addr + 0x0,
                 actor_class,

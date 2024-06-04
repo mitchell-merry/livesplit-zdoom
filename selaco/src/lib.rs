@@ -31,7 +31,9 @@ async fn on_attach(process: &Process) -> Result<(), Error> {
         |_| Ok(()),
     )
     .await;
-    zdoom.dump();
+    if let Ok(player) = zdoom.player() {
+        let _ = player.dump_inventories();
+    }
 
     let mut watchers = Watchers::default();
 
