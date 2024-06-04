@@ -235,13 +235,13 @@ impl Memory {
                         + 0x4,
                 )?;
 
-                // let s = Signature::<17>::new("48 8B 05 ?? ?? ?? ?? 48 8B 1C F0 48 8B C3 48 85 DB");
-                // let all_classes_addr = scan_rel(process, module_range, &s, 0x3, 0x4)?;
+                let s = Signature::<17>::new("49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84");
+                let all_classes_addr = scan_rel(process, module_range, &s, 0x7, 0x4)?;
 
                 Ok(Memory {
                     namedata_addr,
                     players_addr: main_exe_addr + players_addr_offset,
-                    all_classes_addr: main_exe_addr + 0x122F268,
+                    all_classes_addr,
                     level_addr,
                     gameaction_addr,
                     offsets: Offsets::new(version),
