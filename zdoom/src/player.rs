@@ -118,4 +118,6 @@ impl<'a> Player<'a> {
 
         Ok(res)
     }
+
+    // pub fn get_inventory(&self, &str) -> Result<Address, Option>
 }

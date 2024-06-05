@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, Address};
 use asr::string::ArrayCString;
 use zdoom::{
@@ -5,6 +6,7 @@ use zdoom::{
     GameAction, ZDoom, ZDoomVersion,
 };
 use zdoom::pclass::PClass;
+use zdoom::player::Player;
 use zdoom::tarray::TArray;
 
 asr::async_main!(stable);
@@ -83,10 +85,6 @@ async fn on_attach(process: &Process) -> Result<(), Option<Error>> {
         }
 
         if timer::state() == timer::TimerState::Running {
-            if old.gameaction != current.gameaction {
-                asr::print_message(&format!("{:?}, {:?}", old.gameaction, current.gameaction))
-            }
-
             // isLoading
             if old.gameaction == GameAction::Nothing && current.gameaction == GameAction::Completed
                 || old.playerstate == PlayerState::Dead && current.playerstate == PlayerState::Enter
@@ -99,6 +97,15 @@ async fn on_attach(process: &Process) -> Result<(), Option<Error>> {
             {
                 timer::resume_game_time();
             }
+
+            // split
+            if old.objective_history.len() < current.objective_history.len() && old.objective_history.len() != 0 {
+                for completed_objective in current.objective_history {
+                    if !old.objective_history.contains(&completed_objective) {
+                        asr::print_message(&format!("Potentially completed {completed_objective}"));
+                    }
+                }
+            }
         }
 
         next_tick().await;
@@ -110,7 +117,7 @@ struct AutoSplitterState {
     level: String,
     playerstate: PlayerState,
     player_pos: DVector3,
-    objectives: Vec<String>,
+    objective_history: Vec<String>,
 }
 
 #[derive(Default)]
@@ -119,7 +126,7 @@ struct Watchers {
     level: Watcher<String>,
     playerstate: Watcher<PlayerState>,
     player_pos: Watcher<DVector3>,
-    objectives: Watcher<Vec<String>>,
+    objective_history: Watcher<Vec<String>>,
 }
 
 impl Watchers {
@@ -143,48 +150,10 @@ impl Watchers {
         timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
-        let player_inventories = player.get_inventories()?;
-
-        let mut objectives = Vec::new();
-
-        for inv in player_inventories {
-            // asr::print_message("9");
-            let class = process.read::<u64>(inv + 0x8)?.into();
-            let class = PClass::new(
-                process,
-                zdoom.memory.clone(),
-                zdoom.name_data.clone(),
-                class,
-            );
-
-            // asr::print_message("0");
-            let name = class.name()?;
-
-            if name == "Objectives" {
-                // asr::print_message(&format!("a {:?}", inv));
-                let objs_offset = classes.objectives_class.fields()?.get("objs").ok_or(None)?.offset()?.to_owned() as u64;
-                // asr::print_message(&format!("b {objs_offset:X}"));
-                let title_offset = classes.objective_class.fields()?.get("title").ok_or(None)?.offset()?.to_owned() as u64;
-                // asr::print_message(&format!("c {title_offset:X}"));
-
-                // asr::print_message(&format!("d {objectives:X}"));
-                let objectives_arr = TArray::<u64>::new(process, inv + objs_offset);
-
-                for objective in objectives_arr.into_iter()? {
-                    // asr::print_message(&format!("e {objective:X}"));
-                    // asr::print_message(&format!("f {}", Address::from(objective) + title_offset));
-                    let title = process.read_pointer_path::<ArrayCString<128>>(Address::from(objective), asr::PointerSize::Bit64, &[title_offset, 0x0])?.validate_utf8()
-                        .expect("title should always be utf-8")
-                        .to_owned();
-
-                    // asr::print_message(&title);
-                    objectives.push(title);
-                }
-            }
-            // asr::print_message(&format!("{name}, {inv}"));
-        }
+        let (objectives, objective_history) = get_completed_objectives(process, zdoom, classes).unwrap_or_default();
         timer::set_variable("objectives", &format!("{:?}", objectives));
-        self.objectives.update(Some(objectives));
+        timer::set_variable("history", &format!("{:?}", objective_history));
+        self.objective_history.update(Some(objective_history));
 
         Ok(())
     }
@@ -192,7 +161,7 @@ impl Watchers {
     fn to_states(&self) -> Option<(AutoSplitterState, AutoSplitterState)> {
         let level = self.level.pair.as_ref()?;
         let player_pos = self.player_pos.pair.as_ref()?;
-        let objectives = self.objectives.pair.as_ref()?;
+        let objectives = self.objective_history.pair.as_ref()?;
 
         Some((
             AutoSplitterState {
@@ -200,15 +169,61 @@ impl Watchers {
                 level: level.old.to_owned(),
                 playerstate: self.playerstate.pair?.old,
                 player_pos: player_pos.old.to_owned(),
-                objectives: objectives.old.to_owned(),
+                objective_history: objectives.old.to_owned(),
             },
             AutoSplitterState {
                 gameaction: self.gameaction.pair?.current,
                 level: level.current.to_owned(),
                 playerstate: self.playerstate.pair?.current,
                 player_pos: player_pos.current.to_owned(),
-                objectives: objectives.current.to_owned(),
+                objective_history: objectives.current.to_owned(),
             },
         ))
     }
+}
+
+fn get_completed_objectives(process: &Process, zdoom: &ZDoom, classes: &FoundClasses) -> Result<(Vec<String>, Vec<String>), Option<Error>> {
+    let objs_offset = classes.objectives_class.fields()?.get("objs").ok_or(None)?.offset()?.to_owned() as u64;
+    let history_offset = classes.objectives_class.fields()?.get("history").ok_or(None)?.offset()?.to_owned() as u64;
+    let title_offset = classes.objective_class.fields()?.get("title").ok_or(None)?.offset()?.to_owned() as u64;
+
+    let player = zdoom.player()?;
+    let player_inventories = player.get_inventories()?;
+
+    for inv in player_inventories {
+        let class = process.read::<u64>(inv + 0x8)?.into();
+        let class = PClass::new(
+            process,
+            zdoom.memory.clone(),
+            zdoom.name_data.clone(),
+            class,
+        );
+
+        let name = class.name()?;
+        if name == "Objectives" {
+            let objectives_arr = TArray::<u64>::new(process, inv + objs_offset);
+            let mut objectives = Vec::new();
+            for objective in objectives_arr.into_iter()? {
+                let title = process.read_pointer_path::<ArrayCString<128>>(Address::from(objective), asr::PointerSize::Bit64, &[title_offset, 0x0])?.validate_utf8()
+                    .expect("title should always be utf-8")
+                    .to_owned();
+
+                objectives.push(title);
+            }
+
+            let mut objectives_history = Vec::new();
+            let objectives_arr = TArray::<u64>::new(process, inv + history_offset);
+            for objective in objectives_arr.into_iter()? {
+                let title = process.read_pointer_path::<ArrayCString<128>>(Address::from(objective), asr::PointerSize::Bit64, &[title_offset, 0x0])?.validate_utf8()
+                    .expect("title should always be utf-8")
+                    .to_owned();
+
+                objectives_history.push(title);
+            }
+
+            return Ok((objectives, objectives_history));
+        }
+    }
+
+    Ok((Vec::default(), Vec::default()))
 }
