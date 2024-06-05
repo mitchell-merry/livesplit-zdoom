@@ -1,0 +1,17 @@
+[
+    BoolSetting (
+        key: "chapter_timer",
+        description: "Chapter timer mode.",
+    ),
+    TitleSetting (
+        key: "room",
+        description: "Split on room complete:",
+        subsettings: Some([
+            TitleSetting ( key: "something", description: "TeST!", subsettings: Some([
+                BoolSetting ( key: "test_1", description: "TEST BOOL!" ),
+            ])),
+            BoolSetting ( key: "room_T_01_first_contact", description: "A01" ),
+            BoolSetting ( key: "room_T_01_secret_shortcut", description: "A01.1" ),
+        ])
+    )
+]

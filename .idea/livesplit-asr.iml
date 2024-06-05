@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/zdoom/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dismantled/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/snap_the_sentinel/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/diggity-helper/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

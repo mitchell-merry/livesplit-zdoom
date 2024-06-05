@@ -6,4 +6,5 @@ members = [
     "snap_the_sentinel",
     "zdoom"
 ]
+exclude = ["diggity-helper"]
 
