@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
-use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, Address};
+use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, Address, settings};
 use asr::settings::Gui;
+use asr::settings::gui::Title;
 use asr::string::ArrayCString;
 use zdoom::{
     player::{DVector3, PlayerState},
@@ -15,12 +16,28 @@ asr::async_main!(stable);
 
 #[derive(Gui)]
 struct Settings {
+    objectives: Title,
     /// Preparations
-    _3E7: bool,
+    #[heading_level = 1]
+    _999: Title,
+    /// Find a way past the soldiers and locate a weapon
+    _4294966296: bool,
+    /// Prepare to fight
+    _4294966295: bool,
+    /// Locate your combat suit from Personal Belongings
+    _4294966294: bool,
     /// The Lockdown
-    _3E3: bool,
+    #[heading_level = 1]
+    _995: Title,
+    /// Head back to the Blue Door
+    _4294966292: bool,
+    /// Find a way to disengage the lockdown
+    _4294966293: bool,
+    #[heading_level = 1]
     /// Escape
-    _3: bool,
+    _3: Title,
+    /// Find the exit.
+    _4294966291: bool,
 }
 
 async fn main() {
@@ -97,6 +114,8 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             continue;
         }
 
+        let settings_map = settings::Map::load();
+
         let (old, current) = states.unwrap();
 
         if timer::state() == timer::TimerState::NotRunning {
@@ -123,6 +142,17 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             }
 
             // split
+            for (objective_key, old_objective_status) in old.objective_status {
+                if let Some(current_objective_status) = current.objective_status.get(&objective_key) {
+                    if old_objective_status == 0 && current_objective_status.to_owned() == 1 {
+                        asr::print_message(&format!("completed {objective_key}"));
+
+                        if safe_get_bool(&objective_key) {
+                            asr::timer::split();
+                        }
+                    }
+                }
+            }
         }
 
         // if old.objective_history.len() < current.objective_history.len() && old.objective_history.len() != 0 {
@@ -135,6 +165,12 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
         next_tick().await;
     }
+}
+
+fn safe_get_bool(key: &String) -> bool {
+    let settings_map = settings::Map::load();
+
+    settings_map.get(key).unwrap_or(settings::Value::from(false)).get_bool().unwrap_or_default()
 }
 
 struct AutoSplitterState {
@@ -186,7 +222,7 @@ impl Watchers {
         get_objective_status_map(&objective_history, &mut map);
 
         let sorted_map: BTreeMap<_, _> = map.clone().into_iter().collect();
-        timer::set_variable("objective_status", &format!("{:#?}", sorted_map));
+        // timer::set_variable("objective_status", &format!("{:#?}", sorted_map));
 
         self.objective_history.update(Some(objective_history));
         self.objective_status.update(Some(map));
@@ -223,7 +259,7 @@ impl Watchers {
 
 fn get_objective_status_map(objectives: &Vec<Objective>, map: &mut HashMap<String, u32>) {
     for obj in objectives {
-        map.insert(format!("{:X}__{}", obj.tag, obj.title.clone()), obj.status);
+        map.insert(format!("_{}", obj.tag), obj.status);
         get_objective_status_map(&obj.children, map);
     }
 }
