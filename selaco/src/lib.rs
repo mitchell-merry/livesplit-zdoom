@@ -1,9 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, Address, settings};
 use asr::settings::Gui;
 use asr::settings::gui::Title;
 use asr::string::ArrayCString;
+use asr::time::Duration;
 use zdoom::{
     player::{DVector3, PlayerState},
     GameAction, ZDoom, ZDoomVersion,
@@ -64,6 +65,15 @@ struct FoundClasses<'a> {
     objective_class: PClass<'a>,
 }
 
+#[derive(PartialEq)]
+enum LevelTransitionLoadState {
+    NotTransitioning,
+    ActionCompleted,
+    AfterCompletedBeforeWorldDone,
+    ActionWorldDone,
+    ActionAutoSaveAfterWorldDone,
+}
+
 async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Option<Error>> {
     let (mut zdoom, classes) = ZDoom::wait_try_load(
         process,
@@ -80,11 +90,10 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     )
     .await;
     // let _ = zdoom.dump();
-    // if let Ok(player) = zdoom.player() {
-    //     let _ = player.dump_inventories();
-    // }
 
     let mut watchers = Watchers::default();
+    let mut completed_splits = HashSet::new();
+    let mut levelTransitionState = LevelTransitionLoadState::NotTransitioning;
 
     loop {
         if !process.is_open() {
@@ -93,14 +102,6 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
         }
 
         settings.update();
-        let settings_map = asr::settings::Map::load();
-        let val = if let Some(bal_v) = settings_map.get("bal") {
-            bal_v.get_bool().unwrap_or_default()
-        } else {
-            false
-        };
-
-        asr::timer::set_variable("bal", &format!("{:?}", val));
 
         let res = watchers.update(process, &mut zdoom, &classes);
         if res.is_err() {
@@ -114,29 +115,59 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             continue;
         }
 
-        let settings_map = settings::Map::load();
-
         let (old, current) = states.unwrap();
 
+        match levelTransitionState {
+            LevelTransitionLoadState::NotTransitioning => {
+                match current.gameaction {
+                    GameAction::Completed => levelTransitionState = LevelTransitionLoadState::ActionCompleted,
+                    GameAction::WorldDone => levelTransitionState = LevelTransitionLoadState::ActionWorldDone,
+                    _ => {},
+                };
+            },
+            LevelTransitionLoadState::ActionCompleted => {
+                 if current.gameaction == GameAction::Nothing {
+                     levelTransitionState = LevelTransitionLoadState::AfterCompletedBeforeWorldDone;
+                 }
+            },
+            LevelTransitionLoadState::AfterCompletedBeforeWorldDone => {
+                if current.gameaction == GameAction::WorldDone {
+                    levelTransitionState = LevelTransitionLoadState::ActionWorldDone;
+                }
+            },
+            LevelTransitionLoadState::ActionWorldDone => {
+                match current.gameaction {
+                    GameAction::AutoSave => levelTransitionState = LevelTransitionLoadState::ActionAutoSaveAfterWorldDone,
+                    GameAction::Nothing => levelTransitionState = LevelTransitionLoadState::NotTransitioning,
+                    _ => {},
+                }
+            },
+            LevelTransitionLoadState::ActionAutoSaveAfterWorldDone => {
+                if current.gameaction == GameAction::Nothing {
+                    levelTransitionState = LevelTransitionLoadState::NotTransitioning;
+                }
+            },
+        }
+
         if timer::state() == timer::TimerState::NotRunning {
+            completed_splits = HashSet::new();
+
             if current.level == "SE_01a"
                 && old.gameaction == GameAction::NewGame
                 && current.gameaction != GameAction::NewGame
             {
                 timer::start();
+                asr::timer::set_game_time(Duration::ZERO);
             }
         }
 
         if timer::state() == timer::TimerState::Running {
             // isLoading
-            if old.gameaction == GameAction::Nothing && current.gameaction == GameAction::Completed
-                || old.playerstate == PlayerState::Dead && current.playerstate == PlayerState::Enter
+            if levelTransitionState != LevelTransitionLoadState::NotTransitioning || current.playerstate == PlayerState::Enter
             {
                 timer::pause_game_time();
             }
-
-            if old.gameaction == GameAction::WorldDone && current.gameaction == GameAction::Nothing
-                || old.playerstate == PlayerState::Enter && current.playerstate == PlayerState::Live
+            else
             {
                 timer::resume_game_time();
             }
@@ -147,7 +178,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                     if old_objective_status == 0 && current_objective_status.to_owned() == 1 {
                         asr::print_message(&format!("completed {objective_key}"));
 
-                        if safe_get_bool(&objective_key) {
+                        if safe_get_bool(&objective_key, &mut completed_splits) {
                             asr::timer::split();
                         }
                     }
@@ -167,10 +198,19 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     }
 }
 
-fn safe_get_bool(key: &String) -> bool {
+fn safe_get_bool(key: &String, completed_splits: &mut HashSet<String>) -> bool {
     let settings_map = settings::Map::load();
 
-    settings_map.get(key).unwrap_or(settings::Value::from(false)).get_bool().unwrap_or_default()
+    if completed_splits.contains(key) {
+        return false;
+    }
+
+    return if settings_map.get(key).unwrap_or(settings::Value::from(false)).get_bool().unwrap_or_default() {
+        completed_splits.insert(key.to_owned());
+        true
+    } else {
+        false
+    }
 }
 
 struct AutoSplitterState {
