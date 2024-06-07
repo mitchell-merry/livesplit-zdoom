@@ -4,6 +4,11 @@ messing around with reflection in zdoom games
 
 tested with Dismantled, an LZDoom 3.82 game
 
+# MEGA DISCLAIMER
+I am bad at Rust
+
+This is a hard language
+
 ## Compilation
 
 This auto splitter is written in Rust. In order to compile it, you need to
