@@ -1,22 +1,25 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug, Formatter};
-use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, Address, settings};
-use asr::settings::Gui;
 use asr::settings::gui::Title;
+use asr::settings::Gui;
 use asr::string::ArrayCString;
 use asr::time::Duration;
+use asr::{future::next_tick, settings, timer, watcher::Watcher, Address, Error, Process};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Debug, Formatter};
+use zdoom::pclass::PClass;
+use zdoom::player::Player;
+use zdoom::tarray::TArray;
 use zdoom::{
     player::{DVector3, PlayerState},
     GameAction, ZDoom, ZDoomVersion,
 };
-use zdoom::pclass::PClass;
-use zdoom::player::Player;
-use zdoom::tarray::TArray;
 
 asr::async_main!(stable);
 
 #[derive(Gui)]
 struct Settings {
+    #[default = true]
+    /// Split on the results screen (run end)
+    split_on_results: bool,
     objectives: Title,
     /// Preparations
     #[heading_level = 1]
@@ -37,8 +40,105 @@ struct Settings {
     #[heading_level = 1]
     /// Escape
     _3: Title,
+    /// Defeat the Juggernaut
+    _4294966290: bool,
     /// Find the exit.
     _4294966291: bool,
+    #[heading_level = 1]
+    /// A Way Out
+    _200: Title,
+    /// Reach the Rooftops
+    _201: bool,
+    /// Find a way into the Orange Wing of Pathfinder Memorial
+    _202: bool,
+    /// Descend to the Sky Lounge
+    _203: bool,
+    #[heading_level = 1]
+    /// Safety Hazard
+    _220: Title,
+    /// Find a way to de-electrify the water
+    _221: bool,
+    #[heading_level = 1]
+    /// Detour
+    _210: Title,
+    /// Push through the Utility Area
+    _212: bool,
+    /// Reach Water Treatment Plant
+    _213: bool,
+    /// Find a way inside 'The Broken Seal' bar
+    _215: bool,
+    /// Locate elevator and descend even further
+    _216: bool,
+    /// Push through the Parking Garage
+    _217: bool,
+    /// Descend to Street Level
+    _211: bool,
+    #[heading_level = 1]
+    /// Underground Operations
+    _300: Title,
+    /// Reach Sal's Bar
+    _301: bool,
+    /// Acquire Demolition Charges in hidden basement floor
+    _302: bool,
+    /// Expose hidden elevator behind the Wine Rack
+    _306: bool,
+    /// Head back to ground level
+    _304: bool,
+    /// Find a way inside Liancria Offices
+    _305: bool,
+    #[heading_level = 1]
+    /// Mall Security (Purple)
+    _520: Title,
+    /// Enter the South Wing
+    _521: bool,
+    /// Explore South Wing stores and locate the Purple Key
+    _522: bool,
+    #[heading_level = 1]
+    /// Mall Security (Blue)
+    _510: Title,
+    /// Enter the North Wing
+    _511: bool,
+    /// Explore North Wing stores and locate the Blue Key
+    _512: bool,
+    #[heading_level = 1]
+    /// Mall Security
+    _500: Title,
+    /// Leave the Shopping Mall through the other side of the building.
+    _501: bool,
+    /// Unlock the exit by activating both Key Card panels.
+    _502: bool,
+    #[heading_level = 1]
+    /// Safety First!
+    _600: Title,
+    /// Acquire safety equipment
+    _601: bool,
+    #[heading_level = 1]
+    /// Preventive Measures
+    _310: Title,
+    /// Reach the Cloning Facility in Floor B2
+    _318: bool,
+    /// Gain access to the Plant Factory
+    _311: bool,
+    /// Place demo charge on the first target
+    _312: bool,
+    /// Place demo charge on the second target
+    _313: bool,
+    /// Place demo charge on the third target
+    _314: bool,
+    /// Place demo charge on the final target
+    _315: bool,
+    /// Evacuate to the elevator
+    _316: bool,
+    #[heading_level = 1]
+    /// Starlight (Optional) has status 2
+    _700: Title,
+    /// Access the Starlight facility
+    _701: bool,
+    // #[heading_level = 1]
+    // /// Endgame
+    // _720: Title,
+    // /// Push through the tunnels to ACE HQ
+    // _722: bool,
 }
 
 async fn main() {
@@ -84,8 +184,9 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             let objective_class = classes.get("Objective").ok_or(None)?.to_owned();
 
             Ok(FoundClasses {
-                objectives_class
-            , objective_class})
+                objectives_class,
+                objective_class,
+            })
         },
     )
     .await;
@@ -120,33 +221,39 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
         match levelTransitionState {
             LevelTransitionLoadState::NotTransitioning => {
                 match current.gameaction {
-                    GameAction::Completed => levelTransitionState = LevelTransitionLoadState::ActionCompleted,
-                    GameAction::WorldDone => levelTransitionState = LevelTransitionLoadState::ActionWorldDone,
-                    _ => {},
+                    GameAction::Completed => {
+                        levelTransitionState = LevelTransitionLoadState::ActionCompleted
+                    }
+                    GameAction::WorldDone => {
+                        levelTransitionState = LevelTransitionLoadState::ActionWorldDone
+                    }
+                    _ => {}
                 };
-            },
+            }
             LevelTransitionLoadState::ActionCompleted => {
-                 if current.gameaction == GameAction::Nothing {
-                     levelTransitionState = LevelTransitionLoadState::AfterCompletedBeforeWorldDone;
-                 }
-            },
+                if current.gameaction == GameAction::Nothing {
+                    levelTransitionState = LevelTransitionLoadState::AfterCompletedBeforeWorldDone;
+                }
+            }
             LevelTransitionLoadState::AfterCompletedBeforeWorldDone => {
                 if current.gameaction == GameAction::WorldDone {
                     levelTransitionState = LevelTransitionLoadState::ActionWorldDone;
                 }
-            },
-            LevelTransitionLoadState::ActionWorldDone => {
-                match current.gameaction {
-                    GameAction::AutoSave => levelTransitionState = LevelTransitionLoadState::ActionAutoSaveAfterWorldDone,
-                    GameAction::Nothing => levelTransitionState = LevelTransitionLoadState::NotTransitioning,
-                    _ => {},
+            }
+            LevelTransitionLoadState::ActionWorldDone => match current.gameaction {
+                GameAction::AutoSave => {
+                    levelTransitionState = LevelTransitionLoadState::ActionAutoSaveAfterWorldDone
                 }
+                GameAction::Nothing => {
+                    levelTransitionState = LevelTransitionLoadState::NotTransitioning
+                }
+                _ => {}
             },
             LevelTransitionLoadState::ActionAutoSaveAfterWorldDone => {
                 if current.gameaction == GameAction::Nothing {
                     levelTransitionState = LevelTransitionLoadState::NotTransitioning;
                 }
-            },
+            }
         }
 
         if timer::state() == timer::TimerState::NotRunning {
@@ -163,19 +270,20 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
         if timer::state() == timer::TimerState::Running {
             // isLoading
-            if levelTransitionState != LevelTransitionLoadState::NotTransitioning || current.playerstate == PlayerState::Enter
+            if levelTransitionState != LevelTransitionLoadState::NotTransitioning
+                || current.playerstate == PlayerState::Enter
             {
                 timer::pause_game_time();
-            }
-            else
-            {
+            } else {
                 timer::resume_game_time();
             }
 
             // split
             for (objective_key, old_objective_status) in old.objective_status {
-                if let Some(current_objective_status) = current.objective_status.get(&objective_key) {
-                    if old_objective_status == 0 && current_objective_status.to_owned() == 1 {
+                if let Some(current_objective_status) = current.objective_status.get(&objective_key)
+                {
+                    // idk what status 2 means but i've seen it
+                    if old_objective_status == 0 && current_objective_status.to_owned() != 0 {
                         asr::print_message(&format!("completed {objective_key}"));
 
                         if safe_get_bool(&objective_key, &mut completed_splits) {
@@ -183,6 +291,15 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                         }
                     }
                 }
+            }
+
+            if settings.split_on_results
+                && old.player_pos != current.player_pos
+                && current.player_pos.x == -22780.0
+                && current.player_pos.y == 8008.0
+                && current.player_pos.z == -1448.0
+            {
+                asr::timer::split();
             }
         }
 
@@ -205,12 +322,17 @@ fn safe_get_bool(key: &String, completed_splits: &mut HashSet<String>) -> bool {
         return false;
     }
 
-    return if settings_map.get(key).unwrap_or(settings::Value::from(false)).get_bool().unwrap_or_default() {
+    return if settings_map
+        .get(key)
+        .unwrap_or(settings::Value::from(false))
+        .get_bool()
+        .unwrap_or_default()
+    {
         completed_splits.insert(key.to_owned());
         true
     } else {
         false
-    }
+    };
 }
 
 struct AutoSplitterState {
@@ -233,7 +355,12 @@ struct Watchers {
 }
 
 impl Watchers {
-    fn update(&mut self, process: &Process, zdoom: &mut ZDoom, classes: &FoundClasses) -> Result<(), Option<Error>> {
+    fn update(
+        &mut self,
+        process: &Process,
+        zdoom: &mut ZDoom,
+        classes: &FoundClasses,
+    ) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
         let gameaction = zdoom.gameaction().unwrap_or_default();
@@ -253,7 +380,8 @@ impl Watchers {
         timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
-        let (objectives, objective_history) = get_completed_objectives(process, zdoom, classes).unwrap_or_default();
+        let (objectives, objective_history) =
+            get_completed_objectives(process, zdoom, classes).unwrap_or_default();
         timer::set_variable("objectives", &format!("{:#?}", objectives));
         // timer::set_variable("history", &format!("{:#?}", objective_history));
 
@@ -313,13 +441,47 @@ struct Objective {
 }
 
 impl Objective {
-    pub fn read(process: &Process, address: Address, classes: &FoundClasses) -> Result<Self, Option<Error>> {
-        let children_offset = classes.objective_class.fields()?.get("children").ok_or(None)?.offset()?.to_owned() as u64;
-        let title_offset = classes.objective_class.fields()?.get("title").ok_or(None)?.offset()?.to_owned() as u64;
-        let status_offset = classes.objective_class.fields()?.get("status").ok_or(None)?.offset()?.to_owned() as u64;
-        let tag_offset = classes.objective_class.fields()?.get("tag").ok_or(None)?.offset()?.to_owned() as u64;
+    pub fn read(
+        process: &Process,
+        address: Address,
+        classes: &FoundClasses,
+    ) -> Result<Self, Option<Error>> {
+        let children_offset = classes
+            .objective_class
+            .fields()?
+            .get("children")
+            .ok_or(None)?
+            .offset()?
+            .to_owned() as u64;
+        let title_offset = classes
+            .objective_class
+            .fields()?
+            .get("title")
+            .ok_or(None)?
+            .offset()?
+            .to_owned() as u64;
+        let status_offset = classes
+            .objective_class
+            .fields()?
+            .get("status")
+            .ok_or(None)?
+            .offset()?
+            .to_owned() as u64;
+        let tag_offset = classes
+            .objective_class
+            .fields()?
+            .get("tag")
+            .ok_or(None)?
+            .offset()?
+            .to_owned() as u64;
 
-        let title = process.read_pointer_path::<ArrayCString<128>>(address, asr::PointerSize::Bit64, &[title_offset, 0x0])?.validate_utf8()
+        let title = process
+            .read_pointer_path::<ArrayCString<128>>(
+                address,
+                asr::PointerSize::Bit64,
+                &[title_offset, 0x0],
+            )?
+            .validate_utf8()
             .expect("title should always be utf-8")
             .to_owned();
 
@@ -336,7 +498,11 @@ impl Objective {
     }
 }
 
-fn read_objectives(process: &Process, address: Address, classes: &FoundClasses) -> Result<Vec<Objective>, Option<Error>> {
+fn read_objectives(
+    process: &Process,
+    address: Address,
+    classes: &FoundClasses,
+) -> Result<Vec<Objective>, Option<Error>> {
     let objectives_arr = TArray::<u64>::new(process, address);
     let mut objectives = Vec::new();
     for objective in objectives_arr.into_iter()? {
@@ -347,9 +513,25 @@ fn read_objectives(process: &Process, address: Address, classes: &FoundClasses) 
     return Ok(objectives);
 }
 
-fn get_completed_objectives(process: &Process, zdoom: &ZDoom, classes: &FoundClasses) -> Result<(Vec<Objective>, Vec<Objective>), Option<Error>> {
-    let objs_offset = classes.objectives_class.fields()?.get("objs").ok_or(None)?.offset()?.to_owned() as u64;
-    let history_offset = classes.objectives_class.fields()?.get("history").ok_or(None)?.offset()?.to_owned() as u64;
+fn get_completed_objectives(
+    process: &Process,
+    zdoom: &ZDoom,
+    classes: &FoundClasses,
+) -> Result<(Vec<Objective>, Vec<Objective>), Option<Error>> {
+    let objs_offset = classes
+        .objectives_class
+        .fields()?
+        .get("objs")
+        .ok_or(None)?
+        .offset()?
+        .to_owned() as u64;
+    let history_offset = classes
+        .objectives_class
+        .fields()?
+        .get("history")
+        .ok_or(None)?
+        .offset()?
+        .to_owned() as u64;
 
     let player = zdoom.player()?;
     let player_inventories = player.get_inventories()?;
@@ -365,7 +547,10 @@ fn get_completed_objectives(process: &Process, zdoom: &ZDoom, classes: &FoundCla
 
         let name = class.name()?;
         if name == "Objectives" {
-            return Ok((read_objectives(process, inv + objs_offset, classes)?, read_objectives(process, inv + history_offset, classes)?));
+            return Ok((
+                read_objectives(process, inv + objs_offset, classes)?,
+                read_objectives(process, inv + history_offset, classes)?,
+            ));
         }
     }
 

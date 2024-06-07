@@ -10,7 +10,7 @@ use super::{pclass::PClass, Memory};
 const PLAYER_ACTOR_OFFSET: u64 = 0x0;
 const PLAYER_STATE_OFFSET: u64 = 0x8;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct DVector3 {
     pub x: f64,
     pub y: f64,
