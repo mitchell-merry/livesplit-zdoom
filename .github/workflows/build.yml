@@ -14,7 +14,7 @@ jobs:
 
       - name: Set outputs
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "version=v$(git rev-list --count HEAD)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Install Rust
         uses: hecrj/setup-rust-action@v1
@@ -32,8 +32,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: target/wasm32-wasi/release/*.wasm
-          name: ${{ steps.vars.outputs.sha_short }}
-          tag_name: ${{ steps.vars.outputs.sha_short }}
+          name: ${{ steps.vars.outputs.version }}
+          tag_name: ${{ steps.vars.outputs.version }}
           body: |
             This is the release version of the autosplitters in this repo at ${{ github.sha }}.
             
