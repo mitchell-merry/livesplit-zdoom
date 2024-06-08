@@ -1,4 +1,4 @@
-use asr::{string::ArrayCString, Address, Error, Process};
+use asr::{print_message, string::ArrayCString, Address, Error, Process};
 
 const NAME_ENTRY_SIZE: u64 = 0x10;
 

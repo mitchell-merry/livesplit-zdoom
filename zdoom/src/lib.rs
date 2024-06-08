@@ -2,7 +2,9 @@ use std::time::{Duration, Instant};
 use std::{collections::HashMap, rc::Rc};
 
 use asr::future::{next_tick, retry};
-use asr::{deep_pointer::DeepPointer, signature::Signature, Address, Error, Process};
+use asr::{
+    deep_pointer::DeepPointer, print_message, signature::Signature, Address, Error, Process,
+};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 
@@ -41,7 +43,7 @@ impl<'a> ZDoom<'a> {
         let cooldown = Duration::from_secs(3);
 
         let fail_action = || async {
-            asr::print_message(&format!(
+            print_message(&format!(
                 "try_load unsuccessful, waiting {}s...",
                 cooldown.as_secs()
             ));
@@ -54,8 +56,15 @@ impl<'a> ZDoom<'a> {
                 fail_action().await;
                 continue;
             }
-            let memory = Rc::new(memory.unwrap());
 
+            let memory = memory.unwrap();
+            print_message(&format!("Found AllClasses at {}", memory.all_classes_addr));
+            print_message(&format!("Found players at {}", memory.players_addr));
+            print_message(&format!("Found NameData at {}", memory.namedata_addr));
+            print_message(&format!("Found level at {}", memory.level_addr));
+            print_message(&format!("Found gameaction at {}", memory.gameaction_addr));
+
+            let memory = Rc::new(memory);
             let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
             let level = Level::new(process, memory.clone(), memory.level_addr);
 
@@ -73,12 +82,14 @@ impl<'a> ZDoom<'a> {
             let classes = zdoom.classes();
             // assert that we have the Actor class, we need it for Player shenanigans
             if classes.is_err() {
+                print_message("try_load: error loading classes");
                 fail_action().await;
                 continue;
             }
 
             let classes = classes.unwrap();
             if !classes.contains_key("Actor") {
+                print_message("try_load: missing Actor class");
                 fail_action().await;
                 continue;
             }
@@ -86,11 +97,12 @@ impl<'a> ZDoom<'a> {
             let result = load_fn(&classes);
 
             if result.is_err() {
+                print_message("try_load: error running load_fn");
                 fail_action().await;
                 continue;
             }
 
-            asr::print_message("try_load successful!");
+            print_message("try_load successful!");
             return (zdoom, result.unwrap());
         }
     }
@@ -129,7 +141,7 @@ impl<'a> ZDoom<'a> {
     }
 
     pub fn dump(&self) -> Result<(), Error> {
-        asr::print_message(
+        print_message(
             r"#include <cstdint>
 
 template <class T>
@@ -146,7 +158,7 @@ class TArray
                 .show_class()
                 .unwrap_or(format!("// failed getting {name}"));
 
-            asr::print_message(&format!("{c}\n"));
+            print_message(&format!("{c}\n"));
         }
 
         Ok(())
@@ -209,25 +221,48 @@ impl Memory {
         match version {
             // yes these should be signatures or something. TODO
             ZDoomVersion::Lzdoom3_82 => Ok(Memory {
-                namedata_addr: main_exe_addr + 0x9F8E10,
-                players_addr: main_exe_addr + 0x9F3CD0,
-                all_classes_addr: main_exe_addr + 0x9F8980,
+                namedata_addr: scan_rel(
+                    process,
+                    module_range,
+                    Signature::<19>::new(
+                        "0F 84 ?? ?? ?? ?? 48 8B D1 41 B0 01 48 8D 0D ?? ?? ?? ??",
+                    ),
+                    0xF,
+                    0x4,
+                )?,
+                players_addr: scan_rel(
+                    process,
+                    module_range,
+                    Signature::<18>::new("48 8D 05 ?? ?? ?? ?? 48 03 C8 E8 ?? ?? ?? ?? 48 63 05"),
+                    0x3,
+                    0x4,
+                )?,
+                all_classes_addr: main_exe_addr + 0x9F2BD0,
                 level_addr: main_exe_addr + 0x9F5B78,
-                gameaction_addr: main_exe_addr + 0x7044E0,
+                gameaction_addr: main_exe_addr + 0x9F3918,
                 offsets: Offsets::new(version),
             }),
             ZDoomVersion::Gzdoom4_8Pre | ZDoomVersion::Gzdoom4_8_2 => {
-                let s = Signature::<23>::new(
-                    "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
-                );
-                let namedata_addr = scan_rel(process, module_range, &s, 0x9, 0x4)?;
+                let namedata_addr = scan_rel(
+                    process,
+                    module_range,
+                    Signature::<23>::new(
+                        "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
+                    ),
+                    0x9,
+                    0x4,
+                )?;
 
-                let s = Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00");
-                let gameaction_addr = scan_rel(process, module_range, &s, 0xF, 0x8)?;
+                let gameaction_addr = scan_rel(process, module_range, Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"), 0xF, 0x8)?;
 
-                let s = Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8");
                 let level_addr: Address = process
-                    .read::<u64>(scan_rel(process, module_range, &s, 0x3, 0x4)?)?
+                    .read::<u64>(scan_rel(
+                        process,
+                        module_range,
+                        Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8"),
+                        0x3,
+                        0x4,
+                    )?)?
                     .into();
 
                 let s = Signature::<11>::new("48 8B 84 29 ?? ?? ?? ?? 48 85 C0");
@@ -237,10 +272,9 @@ impl Memory {
                         + 0x4,
                 )?;
 
-                let s = Signature::<26>::new(
+                let all_classes_addr = scan_rel(process, module_range, Signature::<26>::new(
                     "49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84",
-                );
-                let all_classes_addr = scan_rel(process, module_range, &s, 0x7, 0x4)?;
+                ), 0x7, 0x4)?;
 
                 Ok(Memory {
                     namedata_addr,
@@ -265,7 +299,7 @@ impl Offsets {
         match version {
             ZDoomVersion::Lzdoom3_82 => Self {
                 pclass_fields: 0x78,
-                level_mapname: 0x2C8,
+                level_mapname: 0x2C0,
             },
             ZDoomVersion::Gzdoom4_8Pre => Self {
                 pclass_fields: 0x80,
@@ -310,13 +344,13 @@ pub enum GameAction {
 fn scan_rel<const N: usize>(
     process: &Process,
     module_range: (Address, u64),
-    signature: &Signature<N>,
+    signature: Signature<N>,
     offset: u32,
     next_instruction: u32,
 ) -> Result<Address, Error> {
     let addr = signature
         .scan_process_range(process, module_range)
-        .unwrap_or_else(|| panic!("failed to get address"))
+        .unwrap_or_else(|| panic!("failed to get address for {signature:?}"))
         + offset;
 
     Ok(addr + process.read::<u32>(addr)? + next_instruction)
