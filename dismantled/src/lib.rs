@@ -19,6 +19,7 @@ const TRUE_ENDING_POSITION: DVector3 = DVector3 {
 #[derive(Gui)]
 struct Settings {
     /// Split on run end
+    #[default = true]
     split_run_end: bool,
     /// Split on entering level
     #[heading_level = 0]
@@ -127,7 +128,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     let (mut zdoom, _) =
         ZDoom::wait_try_load(process, ZDoomVersion::Lzdoom3_82, "lzdoom.exe", |_| Ok(())).await;
 
-    // zdoom.dump();
+    zdoom.dump();
 
     let mut watchers = Watchers::default();
     let mut completed_splits = HashSet::new();

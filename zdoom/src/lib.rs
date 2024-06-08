@@ -237,9 +237,9 @@ impl Memory {
                     0x3,
                     0x4,
                 )?,
-                all_classes_addr: main_exe_addr + 0x9F2BD0,
-                level_addr: main_exe_addr + 0x9F5B78,
-                gameaction_addr: main_exe_addr + 0x9F3918,
+                all_classes_addr: scan_rel(process, module_range, Signature::<22>::new("48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84"), 0x3, 0x4)?,
+                level_addr: scan_rel(process, module_range, Signature::<10>::new("75 D1 89 2D ?? ?? ?? ?? 8B 05"), 0x4, 0x4)?,
+                gameaction_addr: scan_rel(process, module_range, Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"), 0xF, 0x8)?,
                 offsets: Offsets::new(version),
             }),
             ZDoomVersion::Gzdoom4_8Pre | ZDoomVersion::Gzdoom4_8_2 => {

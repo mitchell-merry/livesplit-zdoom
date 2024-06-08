@@ -194,7 +194,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
     let mut watchers = Watchers::default();
     let mut completed_splits = HashSet::new();
-    let mut levelTransitionState = LevelTransitionLoadState::NotTransitioning;
+    let mut level_transition_state = LevelTransitionLoadState::NotTransitioning;
 
     loop {
         if !process.is_open() {
@@ -218,40 +218,47 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
         let (old, current) = states.unwrap();
 
-        match levelTransitionState {
+        match level_transition_state {
             LevelTransitionLoadState::NotTransitioning => {
                 match current.gameaction {
                     GameAction::Completed => {
-                        levelTransitionState = LevelTransitionLoadState::ActionCompleted
+                        level_transition_state = LevelTransitionLoadState::ActionCompleted
                     }
                     GameAction::WorldDone => {
-                        levelTransitionState = LevelTransitionLoadState::ActionWorldDone
+                        level_transition_state = LevelTransitionLoadState::ActionWorldDone
                     }
                     _ => {}
                 };
             }
             LevelTransitionLoadState::ActionCompleted => {
-                if current.gameaction == GameAction::Nothing {
-                    levelTransitionState = LevelTransitionLoadState::AfterCompletedBeforeWorldDone;
-                }
+                match current.gameaction {
+                    GameAction::Nothing => {
+                        level_transition_state =
+                            LevelTransitionLoadState::AfterCompletedBeforeWorldDone
+                    }
+                    GameAction::WorldDone => {
+                        level_transition_state = LevelTransitionLoadState::ActionWorldDone
+                    }
+                    _ => {}
+                };
             }
             LevelTransitionLoadState::AfterCompletedBeforeWorldDone => {
                 if current.gameaction == GameAction::WorldDone {
-                    levelTransitionState = LevelTransitionLoadState::ActionWorldDone;
+                    level_transition_state = LevelTransitionLoadState::ActionWorldDone;
                 }
             }
             LevelTransitionLoadState::ActionWorldDone => match current.gameaction {
                 GameAction::AutoSave => {
-                    levelTransitionState = LevelTransitionLoadState::ActionAutoSaveAfterWorldDone
+                    level_transition_state = LevelTransitionLoadState::ActionAutoSaveAfterWorldDone
                 }
                 GameAction::Nothing => {
-                    levelTransitionState = LevelTransitionLoadState::NotTransitioning
+                    level_transition_state = LevelTransitionLoadState::NotTransitioning
                 }
                 _ => {}
             },
             LevelTransitionLoadState::ActionAutoSaveAfterWorldDone => {
                 if current.gameaction == GameAction::Nothing {
-                    levelTransitionState = LevelTransitionLoadState::NotTransitioning;
+                    level_transition_state = LevelTransitionLoadState::NotTransitioning;
                 }
             }
         }
@@ -270,7 +277,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
         if timer::state() == timer::TimerState::Running {
             // isLoading
-            if levelTransitionState != LevelTransitionLoadState::NotTransitioning
+            if level_transition_state != LevelTransitionLoadState::NotTransitioning
                 || current.playerstate == PlayerState::Enter
             {
                 timer::pause_game_time();
