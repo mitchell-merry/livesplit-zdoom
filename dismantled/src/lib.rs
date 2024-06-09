@@ -128,7 +128,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     let (mut zdoom, _) =
         ZDoom::wait_try_load(process, ZDoomVersion::Lzdoom3_82, "lzdoom.exe", |_| Ok(())).await;
 
-    zdoom.dump();
+    // zdoom.dump();
 
     let mut watchers = Watchers::default();
     let mut completed_splits = HashSet::new();

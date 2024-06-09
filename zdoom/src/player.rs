@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::name_manager::NameManager;
-use asr::{Address, Error, Process};
+use asr::{Address, Error, print_message, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 
@@ -119,5 +119,28 @@ impl<'a> Player<'a> {
         Ok(res)
     }
 
-    // pub fn get_inventory(&self, &str) -> Result<Address, Option>
+    pub fn dump_inventories(&self, name_manager: &Rc<NameManager>) {
+        let res: Result<(), Option<Error>> = (|| {
+            let inventories = self.get_inventories()?;
+
+            for inv in inventories {
+                let class = self.process.read::<u64>(inv + 0x8)?.into();
+                let class = PClass::new(
+                    self.process,
+                    self.memory.clone(),
+                    name_manager.clone(),
+                    class,
+                );
+
+                let name = class.name()?;
+                asr::print_message(name);
+            }
+
+            Ok(())
+        })();
+
+        if res.is_err() {
+            print_message("Encountered an error while dumping inventories.");
+        }
+    }
 }

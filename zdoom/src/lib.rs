@@ -40,6 +40,7 @@ impl<'a> ZDoom<'a> {
     where
         F: Fn(&HashMap<String, PClass<'a>>) -> Result<T, Option<Error>>,
     {
+        asr::print_message(&format!("zdoom: Using version {version:?}"));
         let cooldown = Duration::from_secs(3);
 
         let fail_action = || async {
@@ -192,7 +193,7 @@ class TArray
 
 // disclaimer: I don't know much about the different zdoom versions work...
 // i have only tried this with a few games
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ZDoomVersion {
     Lzdoom3_82,   // Dismantled: Director's Cut
     Gzdoom4_8Pre, // Selaco
