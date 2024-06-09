@@ -33,8 +33,9 @@ struct Settings {
     _level_e1m8_e1m9: bool,
     /// E1M9 - Reef Skyscraper
     _level_e1m9_e1m10: bool,
-    /// E1M10 - Ocean's Helipad
-    _level_e1m10_e1m11: bool,
+    /// E1M10 - Ocean's Helipad (on Comrade Ocean's death)
+    #[default = true]
+    ocean_death: bool,
 }
 
 async fn main() {
@@ -65,8 +66,11 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Err
     )
     .await;
     // zdoom.dump();
-    if let Ok(p) = zdoom.player() {
-        p.dump_inventories(&zdoom.name_data);
+    // if let Ok(p) = zdoom.player() {
+    //     p.dump_inventories(&zdoom.name_data);
+    // }
+    if zdoom.level.dump_actors().is_err() {
+        print_message("there was an error, but good luck knowing what it was");
     }
 
     let mut watchers = Watchers::default();
@@ -115,6 +119,14 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Err
                 let key = format!("_level_{}_{}", old.level, current.level).to_lowercase();
                 split(&key, &mut completed_splits);
             }
+
+            if let Some(old_health) = old.ocean_health {
+                if let Some(current_health) = current.ocean_health {
+                    if settings.ocean_death && old_health > 0 && current_health <= 0 {
+                        split(&String::from("ocean_death"), &mut completed_splits);
+                    }
+                }
+            }
         }
 
         next_tick().await;
@@ -126,6 +138,7 @@ fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
     let settings_map = settings::Map::load();
 
     if completed_splits.contains(key) {
+        print_message(&format!("already split {key}"));
         return false;
     }
 
@@ -135,12 +148,33 @@ fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
         .get_bool()
         .unwrap_or_default()
     {
+        print_message(&format!("completed split {key}!"));
         completed_splits.insert(key.to_owned());
         timer::split();
         true
     } else {
+        print_message(&format!("setting not enabled {key}"));
         false
     };
+}
+
+pub fn get_ocean_health(process: &Process, zdoom: &mut ZDoom) -> Option<u32> {
+    let res: Result<u32, Option<Error>> = (|| {
+        if zdoom.level.name()? != "E1M10" {
+            return Err(None)
+        }
+
+        let ocean = zdoom.level.find_actor("DummyOcean")?;
+        let actor_health_offset = zdoom.classes()?.get("Actor").unwrap().fields()?.get("Health").unwrap().offset()?.to_owned();
+
+        Ok(process.read::<u32>(ocean + actor_health_offset)?)
+    })();
+
+    if res.is_ok() {
+        return Some(res.unwrap());
+    }
+
+    None
 }
 
 struct AutoSplitterState {
@@ -148,6 +182,7 @@ struct AutoSplitterState {
     level: String,
     playerstate: PlayerState,
     player_pos: DVector3,
+    ocean_health: Option<u32>,
 }
 
 #[derive(Default)]
@@ -156,10 +191,11 @@ struct Watchers {
     level: Watcher<String>,
     playerstate: Watcher<PlayerState>,
     player_pos: Watcher<DVector3>,
+    ocean_health: Watcher<Option<u32>>,
 }
 
 impl Watchers {
-    fn update(&mut self, _process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
+    fn update(&mut self, process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
         let gameaction = zdoom.gameaction().unwrap_or_default();
@@ -179,6 +215,10 @@ impl Watchers {
         timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
+        let ocean_health = get_ocean_health(process, zdoom);
+        timer::set_variable("ocean_health", &format!("{:?}", ocean_health));
+        self.ocean_health.update(Some(ocean_health));
+
         Ok(())
     }
 
@@ -192,12 +232,14 @@ impl Watchers {
                 level: level.old.to_owned(),
                 playerstate: self.playerstate.pair?.old,
                 player_pos: player_pos.old.to_owned(),
+                ocean_health: self.ocean_health.pair?.old,
             },
             AutoSplitterState {
                 gameaction: self.gameaction.pair?.current,
                 level: level.current.to_owned(),
                 playerstate: self.playerstate.pair?.current,
                 player_pos: player_pos.current.to_owned(),
+                ocean_health: self.ocean_health.pair?.current,
             },
         ))
     }

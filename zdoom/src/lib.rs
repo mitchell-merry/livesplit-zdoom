@@ -67,7 +67,7 @@ impl<'a> ZDoom<'a> {
 
             let memory = Rc::new(memory);
             let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
-            let level = Level::new(process, memory.clone(), memory.level_addr);
+            let level = Level::new(process, memory.clone(), name_data.clone(), memory.level_addr);
 
             let zdoom = ZDoom {
                 process,
@@ -111,9 +111,9 @@ impl<'a> ZDoom<'a> {
     pub fn classes(&self) -> Result<&HashMap<String, PClass<'a>>, Error> {
         self.classes.get_or_try_init(|| {
             let mut classes: HashMap<String, PClass<'a>> = HashMap::new();
-            let all_classes = TArray::<u64>::new(self.process, self.memory.all_classes_addr);
+            let all_classes = TArray::new(self.process, self.memory.all_classes_addr);
 
-            for class in all_classes.into_iter()? {
+            for class in all_classes.iter::<u64>()? {
                 let pclass = PClass::<'a>::new(
                     self.process,
                     self.memory.clone(),
@@ -293,6 +293,8 @@ impl Memory {
 struct Offsets {
     pclass_fields: u64,
     level_mapname: u64,
+    level_sectors: u64,
+    sector_thinglist: u64,
 }
 
 impl Offsets {
@@ -301,14 +303,21 @@ impl Offsets {
             ZDoomVersion::Lzdoom3_82 => Self {
                 pclass_fields: 0x78,
                 level_mapname: 0x2C0,
+                level_sectors: 0x10,
+                sector_thinglist: 0x180,
             },
             ZDoomVersion::Gzdoom4_8Pre => Self {
                 pclass_fields: 0x80,
                 level_mapname: 0x9F8,
+                // TODO check these
+                level_sectors: 0x50,
+                sector_thinglist: 0x180,
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {
                 pclass_fields: 0x78,
                 level_mapname: 0x9D8,
+                level_sectors: 0x50,
+                sector_thinglist: 0x268,
             },
         }
     }

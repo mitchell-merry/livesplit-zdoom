@@ -81,9 +81,9 @@ impl<'a> PClass<'a> {
             let mut fields = HashMap::new();
 
             let fields_addr = self.address.add(self.memory.offsets.pclass_fields);
-            let field_addrs = TArray::<u64>::new(self.process, fields_addr);
+            let field_addrs = TArray::new(self.process, fields_addr);
 
-            for field_addr in field_addrs.into_iter()? {
+            for field_addr in field_addrs.iter::<u64>()? {
                 let field = PField::new(
                     &self.process,
                     self.memory.clone(),

@@ -3,22 +3,21 @@ use std::marker::PhantomData;
 use asr::{Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 
-pub struct TArray<'a, T: CheckedBitPattern> {
-    _phantom: PhantomData<T>,
+pub struct TArray<'a> {
     process: &'a Process,
     address: Address,
 }
 
-impl<'a, T: CheckedBitPattern> TArray<'a, T> {
-    pub fn new(process: &'a Process, address: Address) -> TArray<'a, T> {
+impl<'a> TArray<'a> {
+    pub fn new(process: &'a Process, address: Address) -> TArray<'a> {
         TArray {
-            _phantom: PhantomData,
             process,
             address,
         }
     }
 
-    pub fn into_iter(&self) -> Result<TArrayIterator<'a, T>, Error> {
+    /// Iterate over each item in this TArray, reading the full item each time
+    pub fn iter<T: CheckedBitPattern>(&self) -> Result<TArrayIterator<'a, T>, Error> {
         let size =
             self.process
                 .read_pointer_path(self.address, asr::PointerSize::Bit64, &[0x8_u64])?;
@@ -30,7 +29,54 @@ impl<'a, T: CheckedBitPattern> TArray<'a, T> {
             index: 0,
         })
     }
+
+    /// Iterate over the addresses pointing at each item in this TArray
+    ///
+    /// This is useful when you don't want to read the full content of each item,
+    /// or you don't know the exact structure of the item (e.g. it's dependent on zdoom version)
+    pub fn iter_addr(&self, item_size: u64) -> Result<TArrayAddressIterator<'a>, Error> {
+        TArrayAddressIterator::new(self.process, self.address, item_size)
+    }
 }
+
+pub struct TArrayAddressIterator<'a> {
+    process: &'a Process,
+    address: Address,
+    item_size: u64,
+    array_addr: Address,
+    size: u32,
+    index: u32,
+}
+
+impl<'a> TArrayAddressIterator<'a> {
+    fn new(process: &'a Process, address: Address, item_size: u64) -> Result<TArrayAddressIterator<'a>, Error> {
+        Ok(TArrayAddressIterator {
+            process,
+            address,
+            item_size,
+            array_addr: process.read::<u64>(address + 0x0_u64)?.into(),
+            size: process.read(address + 0x8_u64)?,
+            index: 0,
+        })
+    }
+}
+
+impl<'a> Iterator for TArrayAddressIterator<'a> {
+    type Item = Address;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.size {
+            return None;
+        }
+
+        let offset = self.item_size * self.index as u64;
+
+        self.index += 1;
+
+        Some((self.array_addr + offset).into())
+    }
+}
+
 
 pub struct TArrayIterator<'a, T: CheckedBitPattern> {
     _phantom: PhantomData<T>,

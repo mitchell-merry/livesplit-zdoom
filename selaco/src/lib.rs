@@ -510,9 +510,9 @@ fn read_objectives(
     address: Address,
     classes: &FoundClasses,
 ) -> Result<Vec<Objective>, Option<Error>> {
-    let objectives_arr = TArray::<u64>::new(process, address);
+    let objectives_arr = TArray::new(process, address);
     let mut objectives = Vec::new();
-    for objective in objectives_arr.into_iter()? {
+    for objective in objectives_arr.iter::<u64>()? {
         if let Ok(obj) = Objective::read(process, objective.into(), classes) {
             objectives.push(obj);
         }
