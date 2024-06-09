@@ -1,2 +1,4 @@
 /target
 auto_splitter_logs.*
+/.idea
+/.vscode
