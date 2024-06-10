@@ -69,7 +69,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Err
     // if let Ok(p) = zdoom.player() {
     //     p.dump_inventories(&zdoom.name_data);
     // }
-    if zdoom.level.dump_actors().is_err() {
+    if zdoom.level.dump_actors(zdoom.classes().unwrap().get("Actor").unwrap()).is_err() {
         print_message("there was an error, but good luck knowing what it was");
     }
 

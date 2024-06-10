@@ -81,9 +81,10 @@ impl<'a> Level<'a> {
         Err(None)
     }
 
-    pub fn dump_actors(&self) -> Result<(), Error> {
-        print_message("Dumping actors...");
+    pub fn get_actor_names(&self, actor_class: &PClass<'a>) -> Result<Vec<String>, Error> {
         let sectors = TArray::new(self.process, self.address + self.memory.offsets.level_sectors);
+
+        let mut actors = Vec::new();
 
         for sector in sectors.iter_addr(0x310)? {
             let mut actor_next = sector + self.memory.offsets.sector_thinglist;
@@ -91,8 +92,6 @@ impl<'a> Level<'a> {
                 if Address::from(actor) == Address::NULL {
                     break;
                 }
-
-                asr::print_message(&format!("found actor at {:X}", actor));
 
                 let class = self.process.read::<u64>(actor + 0x8)?.into();
                 let class = PClass::new(
@@ -103,11 +102,19 @@ impl<'a> Level<'a> {
                 );
 
                 let name = class.name()?;
-                asr::print_message(name);
+                actors.push(name.to_owned());
 
-                actor_next = Address::from(actor + 0x40);
+                actor_next = Address::from(actor + actor_class.fields().unwrap().get("snext").unwrap().offset().unwrap().to_owned() as u64);
             }
         }
+
+        Ok(actors)
+    }
+
+    pub fn dump_actors(&self, actor_class: &PClass<'a>) -> Result<(), Error> {
+        print_message("Dumping actors...");
+        let actors = self.get_actor_names(actor_class)?;
+        actors.iter().for_each(|actor| asr::print_message(actor));
 
         Ok(())
     }

@@ -163,6 +163,7 @@ async fn main() {
 struct FoundClasses<'a> {
     objectives_class: PClass<'a>,
     objective_class: PClass<'a>,
+    actor_class: PClass<'a>,
 }
 
 #[derive(PartialEq)]
@@ -182,15 +183,18 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
         |classes| {
             let objectives_class = classes.get("Objectives").ok_or(None)?.to_owned();
             let objective_class = classes.get("Objective").ok_or(None)?.to_owned();
+            let actor_class = classes.get("Actor").ok_or(None)?.to_owned();
 
             Ok(FoundClasses {
                 objectives_class,
                 objective_class,
+                actor_class,
             })
         },
     )
     .await;
     // let _ = zdoom.dump();
+    // let _ = zdoom.level.dump_actors(&classes.actor_class);
 
     let mut watchers = Watchers::default();
     let mut completed_splits = HashSet::new();
@@ -310,10 +314,10 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             }
         }
 
-        // if old.objective_history.len() < current.objective_history.len() && old.objective_history.len() != 0 {
-        //     for completed_objective in current.objective_history {
-        //         if !old.objective_history.contains(&completed_objective) {
-        //             asr::print_message(&format!("Potentially completed {completed_objective}"));
+        // if old.actors.len() < current.actors.len() && old.actors.len() != 0 {
+        //     for a in current.actors {
+        //         if !old.actors.contains(&a) {
+        //             asr::print_message(&format!("new actor {a}"));
         //         }
         //     }
         // }
@@ -362,11 +366,11 @@ struct Watchers {
 }
 
 impl Watchers {
-    fn update(
+    fn update<'a>(
         &mut self,
-        process: &Process,
-        zdoom: &mut ZDoom,
-        classes: &FoundClasses,
+        process: &'a Process,
+        zdoom: &mut ZDoom<'a>,
+        classes: &FoundClasses<'a>,
     ) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
@@ -401,6 +405,10 @@ impl Watchers {
 
         self.objective_history.update(Some(objective_history));
         self.objective_status.update(Some(map));
+
+        // let mut actors = zdoom.level.get_actor_names(&classes.actor_class)?;
+        // actors.sort();
+        // timer::set_variable("actors", &format!("{:#?}", actors));
 
         Ok(())
     }

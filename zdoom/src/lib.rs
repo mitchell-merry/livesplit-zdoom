@@ -311,7 +311,7 @@ impl Offsets {
                 level_mapname: 0x9F8,
                 // TODO check these
                 level_sectors: 0x50,
-                sector_thinglist: 0x180,
+                sector_thinglist: 0x268,
             },
             ZDoomVersion::Gzdoom4_8_2 => Self {
                 pclass_fields: 0x78,
