@@ -6,12 +6,15 @@ use asr::{future::next_tick, settings, timer, watcher::Watcher, Address, Error, 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use zdoom::pclass::PClass;
-use zdoom::player::Player;
 use zdoom::tarray::TArray;
 use zdoom::{
     player::{DVector3, PlayerState},
     GameAction, ZDoom, ZDoomVersion,
 };
+
+#[macro_use]
+extern crate helpers;
+use helpers::{impl_auto_splitter_state, split};
 
 asr::async_main!(stable);
 
@@ -297,9 +300,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                     if old_objective_status == 0 && current_objective_status.to_owned() != 0 {
                         asr::print_message(&format!("completed {objective_key}"));
 
-                        if safe_get_bool(&objective_key, &mut completed_splits) {
-                            asr::timer::split();
-                        }
+                        split(&objective_key, &mut completed_splits);
                     }
                 }
             }
@@ -326,44 +327,14 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     }
 }
 
-fn safe_get_bool(key: &String, completed_splits: &mut HashSet<String>) -> bool {
-    let settings_map = settings::Map::load();
-
-    if completed_splits.contains(key) {
-        return false;
-    }
-
-    return if settings_map
-        .get(key)
-        .unwrap_or(settings::Value::from(false))
-        .get_bool()
-        .unwrap_or_default()
-    {
-        completed_splits.insert(key.to_owned());
-        true
-    } else {
-        false
-    };
-}
-
-struct AutoSplitterState {
-    gameaction: GameAction,
-    level: String,
-    playerstate: PlayerState,
-    player_pos: DVector3,
-    objective_history: Vec<Objective>,
-    objective_status: HashMap<String, u32>,
-}
-
-#[derive(Default)]
-struct Watchers {
+impl_auto_splitter_state!(Watchers {
     gameaction: Watcher<GameAction>,
     level: Watcher<String>,
     playerstate: Watcher<PlayerState>,
     player_pos: Watcher<DVector3>,
     objective_history: Watcher<Vec<Objective>>,
     objective_status: Watcher<HashMap<String, u32>>,
-}
+});
 
 impl Watchers {
     fn update<'a>(
@@ -411,32 +382,6 @@ impl Watchers {
         // timer::set_variable("actors", &format!("{:#?}", actors));
 
         Ok(())
-    }
-
-    fn to_states(&self) -> Option<(AutoSplitterState, AutoSplitterState)> {
-        let level = self.level.pair.as_ref()?;
-        let player_pos = self.player_pos.pair.as_ref()?;
-        let objectives = self.objective_history.pair.as_ref()?;
-        let objective_status = self.objective_status.pair.as_ref()?;
-
-        Some((
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.old,
-                level: level.old.to_owned(),
-                playerstate: self.playerstate.pair?.old,
-                player_pos: player_pos.old.to_owned(),
-                objective_history: objectives.old.to_owned(),
-                objective_status: objective_status.old.to_owned(),
-            },
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.current,
-                level: level.current.to_owned(),
-                playerstate: self.playerstate.pair?.current,
-                player_pos: player_pos.current.to_owned(),
-                objective_history: objectives.current.to_owned(),
-                objective_status: objective_status.current.to_owned(),
-            },
-        ))
     }
 }
 

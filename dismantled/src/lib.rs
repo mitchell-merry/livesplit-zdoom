@@ -1,12 +1,16 @@
 use asr::settings::gui::Title;
 use asr::settings::Gui;
-use asr::{future::next_tick, settings, timer, watcher::Watcher, Error, Process};
+use asr::{future::next_tick, timer, watcher::Watcher, Error, Process};
 use std::collections::HashSet;
 use zdoom::pclass::PClass;
 use zdoom::{
     player::{DVector3, PlayerState},
     GameAction, ZDoom, ZDoomVersion,
 };
+
+#[macro_use]
+extern crate helpers;
+use helpers::{impl_auto_splitter_state, split};
 
 asr::async_main!(stable);
 
@@ -170,9 +174,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
 
             if old.level != current.level {
                 let key = &format!("_level_{}", current.level.to_lowercase());
-                if safe_get_bool(key, &mut completed_splits) {
-                    timer::split();
-                }
+                split(key, &mut completed_splits);
             }
 
             if old.inventories.len() != 0 {
@@ -180,9 +182,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                     if !old.inventories.contains(&inventory) {
                         asr::print_message(&format!("Picked up {inventory}"));
                         let key = &format!("_item_{}", inventory.to_owned().to_lowercase());
-                        if safe_get_bool(key, &mut completed_splits) {
-                            timer::split();
-                        }
+                        split(key, &mut completed_splits);
                     }
                 }
             }
@@ -190,9 +190,8 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             if current.level == "MAP07"
                 && current.player_pos == TRUE_ENDING_POSITION
                 && old.player_pos != current.player_pos
-                && safe_get_bool(&String::from("split_run_end"), &mut completed_splits)
             {
-                timer::split();
+                split(&String::from("split_run_end"), &mut completed_splits);
             }
         }
 
@@ -200,62 +199,29 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
     }
 }
 
-fn safe_get_bool(key: &String, completed_splits: &mut HashSet<String>) -> bool {
-    let settings_map = settings::Map::load();
-
-    if completed_splits.contains(key) {
-        return false;
-    }
-
-    return if settings_map
-        .get(key)
-        .unwrap_or(settings::Value::from(false))
-        .get_bool()
-        .unwrap_or_default()
-    {
-        completed_splits.insert(key.to_owned());
-        true
-    } else {
-        false
-    };
-}
-
-struct AutoSplitterState {
-    gameaction: GameAction,
-    level: String,
-    playerstate: PlayerState,
-    player_pos: DVector3,
-    inventories: HashSet<String>,
-}
-
-#[derive(Default)]
-struct Watchers {
+impl_auto_splitter_state!(Watchers {
     gameaction: Watcher<GameAction>,
     level: Watcher<String>,
     playerstate: Watcher<PlayerState>,
     player_pos: Watcher<DVector3>,
     inventories: Watcher<HashSet<String>>,
-}
+});
 
 impl Watchers {
     fn update(&mut self, process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
         let gameaction = zdoom.gameaction().unwrap_or_default();
-        timer::set_variable("gameaction", &format!("{:?}", gameaction));
         self.gameaction.update(Some(gameaction));
 
         let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();
-        timer::set_variable("map", level_name.as_str());
         self.level.update(Some(level_name));
 
         let player = zdoom.player()?;
         let playerstate = player.state()?.to_owned();
-        timer::set_variable("playerstate", &format!("{:?}", playerstate));
         self.playerstate.update(Some(playerstate));
 
         let player_pos = player.pos().map(|v| v.to_owned()).unwrap_or_default();
-        timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
         let mut inventories = HashSet::new();
@@ -275,32 +241,8 @@ impl Watchers {
         }
         let mut vec = Vec::from_iter(inventories.clone().into_iter());
         vec.sort();
-        timer::set_variable("inventories", &format!("{:#?}", vec));
         self.inventories.update(Some(inventories));
 
         Ok(())
-    }
-
-    fn to_states(&self) -> Option<(AutoSplitterState, AutoSplitterState)> {
-        let level = self.level.pair.as_ref()?;
-        let player_pos = self.player_pos.pair.as_ref()?;
-        let inventories = self.inventories.pair.as_ref()?;
-
-        Some((
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.old,
-                level: level.old.to_owned(),
-                playerstate: self.playerstate.pair?.old,
-                player_pos: player_pos.old.to_owned(),
-                inventories: inventories.old.to_owned(),
-            },
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.current,
-                level: level.current.to_owned(),
-                playerstate: self.playerstate.pair?.current,
-                player_pos: player_pos.current.to_owned(),
-                inventories: inventories.current.to_owned(),
-            },
-        ))
     }
 }

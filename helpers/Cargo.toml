@@ -1,15 +1,13 @@
 [package]
-name = "selaco"
+name = "helpers"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 asr = { git = "https://github.com/LiveSplit/asr", features = [ "derive" ] }
-helpers = { path = "../helpers" }
-zdoom = { path = "../zdoom" }
+paste = "1.0.15"
 
 [lib]
-crate-type = ["cdylib"]
 
 [profile.release]
 lto = true

@@ -7,6 +7,10 @@ use zdoom::{
     GameAction, ZDoom, ZDoomVersion,
 };
 
+#[macro_use]
+extern crate helpers;
+use helpers::{impl_auto_splitter_state, split};
+
 asr::async_main!(stable);
 
 
@@ -133,31 +137,6 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Err
     }
 }
 
-fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
-    print_message(&format!("Checking setting for {key}"));
-    let settings_map = settings::Map::load();
-
-    if completed_splits.contains(key) {
-        print_message(&format!("already split {key}"));
-        return false;
-    }
-
-    return if settings_map
-        .get(key)
-        .unwrap_or(settings::Value::from(false))
-        .get_bool()
-        .unwrap_or_default()
-    {
-        print_message(&format!("completed split {key}!"));
-        completed_splits.insert(key.to_owned());
-        timer::split();
-        true
-    } else {
-        print_message(&format!("setting not enabled {key}"));
-        false
-    };
-}
-
 pub fn get_ocean_health(process: &Process, zdoom: &mut ZDoom) -> Option<u32> {
     let res: Result<u32, Option<Error>> = (|| {
         if zdoom.level.name()? != "E1M10" {
@@ -177,70 +156,31 @@ pub fn get_ocean_health(process: &Process, zdoom: &mut ZDoom) -> Option<u32> {
     None
 }
 
-struct AutoSplitterState {
-    gameaction: GameAction,
-    level: String,
-    playerstate: PlayerState,
-    player_pos: DVector3,
-    ocean_health: Option<u32>,
-}
-
-#[derive(Default)]
-struct Watchers {
+impl_auto_splitter_state!(Watchers {
     gameaction: Watcher<GameAction>,
     level: Watcher<String>,
     playerstate: Watcher<PlayerState>,
     player_pos: Watcher<DVector3>,
     ocean_health: Watcher<Option<u32>>,
-}
+});
 
 impl Watchers {
     fn update(&mut self, process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
-        let gameaction = zdoom.gameaction().unwrap_or_default();
-        timer::set_variable("gameaction", &format!("{:?}", gameaction));
-        self.gameaction.update(Some(gameaction));
+        self.gameaction.update(Some(zdoom.gameaction().unwrap_or_default()));
 
         let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();
-        timer::set_variable("map", level_name.as_str());
         self.level.update(Some(level_name));
 
         let player = zdoom.player()?;
-        let playerstate = player.state()?.to_owned();
-        timer::set_variable("playerstate", &format!("{:?}", playerstate));
-        self.playerstate.update(Some(playerstate));
+        self.playerstate.update(Some(player.state()?.to_owned()));
 
         let player_pos = player.pos().map(|v| v.to_owned()).unwrap_or_default();
-        timer::set_variable("pos", &format!("{:?}", player_pos));
         self.player_pos.update(Some(player_pos));
 
-        let ocean_health = get_ocean_health(process, zdoom);
-        timer::set_variable("ocean_health", &format!("{:?}", ocean_health));
-        self.ocean_health.update(Some(ocean_health));
+        self.ocean_health.update(Some(get_ocean_health(process, zdoom)));
 
         Ok(())
-    }
-
-    fn to_states(&self) -> Option<(AutoSplitterState, AutoSplitterState)> {
-        let level = self.level.pair.as_ref()?;
-        let player_pos = self.player_pos.pair.as_ref()?;
-
-        Some((
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.old,
-                level: level.old.to_owned(),
-                playerstate: self.playerstate.pair?.old,
-                player_pos: player_pos.old.to_owned(),
-                ocean_health: self.ocean_health.pair?.old,
-            },
-            AutoSplitterState {
-                gameaction: self.gameaction.pair?.current,
-                level: level.current.to_owned(),
-                playerstate: self.playerstate.pair?.current,
-                player_pos: player_pos.current.to_owned(),
-                ocean_health: self.ocean_health.pair?.current,
-            },
-        ))
     }
 }

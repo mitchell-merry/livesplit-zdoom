@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 asr = { git = "https://github.com/LiveSplit/asr", features = [ "derive" ] }
+helpers = { path = "../helpers" }
 zdoom = { path = "../zdoom" }
 
 [lib]

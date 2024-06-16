@@ -2,9 +2,9 @@
 resolver = "2"
 members = [
     "dismantled",
+    "helpers",
     "selaco",
     "snap_the_sentinel",
     "zdoom"
 ]
-exclude = ["diggity-helper"]
 
