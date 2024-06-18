@@ -1,8 +1,8 @@
 extern crate proc_macro;
 
 use asr::{settings, timer};
-use std::collections::HashSet;
 pub use paste::paste;
+use std::collections::HashSet;
 
 #[macro_export]
 macro_rules! impl_auto_splitter_state {
