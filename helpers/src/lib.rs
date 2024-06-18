@@ -51,7 +51,7 @@ pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
         return false;
     }
 
-    return if settings_map
+    if settings_map
         .get(key)
         .unwrap_or(settings::Value::from(false))
         .get_bool()
@@ -62,5 +62,5 @@ pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
         true
     } else {
         false
-    };
+    }
 }

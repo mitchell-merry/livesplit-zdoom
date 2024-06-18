@@ -179,7 +179,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                 split(key, &mut completed_splits);
             }
 
-            if old.inventories.len() != 0 {
+            if !old.inventories.is_empty() {
                 for inventory in current.inventories {
                     if !old.inventories.contains(&inventory) {
                         asr::print_message(&format!("Picked up {inventory}"));
@@ -241,7 +241,7 @@ impl Watchers {
             let name = class.name()?;
             inventories.insert(name.to_owned());
         }
-        let mut vec = Vec::from_iter(inventories.clone().into_iter());
+        let mut vec = Vec::from_iter(inventories.clone());
         vec.sort();
         self.inventories.update(Some(inventories));
 

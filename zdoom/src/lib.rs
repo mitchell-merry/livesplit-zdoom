@@ -1,9 +1,8 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 use std::{collections::HashMap, rc::Rc};
 
-use asr::future::{next_tick, retry};
 use asr::{
-    deep_pointer::DeepPointer, print_message, signature::Signature, Address, Error, Process,
+    print_message, signature::Signature, Address, Error, Process,
 };
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
@@ -95,7 +94,7 @@ impl<'a> ZDoom<'a> {
                 continue;
             }
 
-            let result = load_fn(&classes);
+            let result = load_fn(classes);
 
             if result.is_err() {
                 print_message("try_load: error running load_fn");

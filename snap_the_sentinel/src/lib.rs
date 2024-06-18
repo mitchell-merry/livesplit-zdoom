@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, settings, print_message};
+use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, print_message};
 use asr::settings::Gui;
 use asr::settings::gui::Title;
 use zdoom::{

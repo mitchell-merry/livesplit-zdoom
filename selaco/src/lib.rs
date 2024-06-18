@@ -2,9 +2,9 @@ use asr::settings::gui::Title;
 use asr::settings::Gui;
 use asr::string::ArrayCString;
 use asr::time::Duration;
-use asr::{future::next_tick, settings, timer, watcher::Watcher, Address, Error, Process};
+use asr::{future::next_tick, timer, watcher::Watcher, Address, Error, Process};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 use zdoom::pclass::PClass;
 use zdoom::tarray::TArray;
 use zdoom::{
@@ -297,7 +297,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                 if let Some(current_objective_status) = current.objective_status.get(&objective_key)
                 {
                     // idk what status 2 means but i've seen it
-                    if old_objective_status == 0 && current_objective_status.to_owned() != 0 {
+                    if old_objective_status == 0 && *current_objective_status != 0 {
                         asr::print_message(&format!("completed {objective_key}"));
 
                         split(&objective_key, &mut completed_splits);
@@ -470,7 +470,7 @@ fn read_objectives(
             objectives.push(obj);
         }
     }
-    return Ok(objectives);
+    Ok(objectives)
 }
 
 fn get_completed_objectives(

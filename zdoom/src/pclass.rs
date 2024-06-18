@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, iter::Once, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 
 use asr::{string::ArrayCString, Address, Error, Process};
 use bitflags::bitflags;
@@ -85,7 +85,7 @@ impl<'a> PClass<'a> {
 
             for field_addr in field_addrs.iter::<u64>()? {
                 let field = PField::new(
-                    &self.process,
+                    self.process,
                     self.memory.clone(),
                     self.name_manager.clone(),
                     field_addr.into(),
@@ -309,7 +309,7 @@ impl<'a> PartialEq for PField<'a> {
             return false;
         }
 
-        return name.unwrap() == other_name.unwrap() || flags.unwrap() == other_flags.unwrap();
+        name.unwrap() == other_name.unwrap() || flags.unwrap() == other_flags.unwrap()
     }
 }
 
@@ -342,7 +342,7 @@ impl<'a> Ord for PField<'a> {
             return Ordering::Greater;
         }
 
-        return Ordering::Equal;
+        Ordering::Equal
     }
 }
 
@@ -424,7 +424,7 @@ impl<'a> PType<'a> {
             Regex::new(r"^(?<outer_type>.+?)<(?<inner_type>.+?)>(?<elements>\[\d+\])?$").unwrap();
 
         return if let Some(captures) = generic.captures(name.as_str()) {
-            let outer_type = (&captures["outer_type"]).to_owned();
+            let outer_type = captures["outer_type"].to_owned();
             let elements = captures.name("elements");
             let mut inner_type = PType::name_as_field_type(captures["inner_type"].to_owned())?;
             if let Some(elements) = elements {

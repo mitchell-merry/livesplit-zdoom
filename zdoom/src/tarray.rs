@@ -73,7 +73,7 @@ impl<'a> Iterator for TArrayAddressIterator<'a> {
 
         self.index += 1;
 
-        Some((self.array_addr + offset).into())
+        Some(self.array_addr + offset)
     }
 }
 
