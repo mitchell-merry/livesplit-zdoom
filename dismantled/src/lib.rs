@@ -76,6 +76,8 @@ struct Settings {
     _item_redcable: bool,
     /// Ruby (in outside statue)
     _item_ruby: bool,
+    /// Key near the Girl (15)
+    _item_keyf15: bool,
     /// Emerald (in party)
     _item_emerald: bool,
     /// Crank
