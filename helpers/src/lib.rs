@@ -77,6 +77,7 @@ pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
     }
 
     print_message(&format!("-> {key} split!"));
+    completed_splits.insert(key.to_owned());
     timer::split();
 
     true

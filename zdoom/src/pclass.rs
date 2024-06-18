@@ -98,8 +98,6 @@ impl<'a> PClass<'a> {
     }
 
     pub fn show_class(&self) -> Result<String, Error> {
-        let regex_struct = Regex::new(r"(Native)?Struct<(?<name>.+?)>").unwrap();
-
         let mut struct_out = String::new();
 
         let class_size = self.size()?.to_owned();
@@ -142,7 +140,6 @@ impl<'a> PClass<'a> {
                 ""
             };
 
-            let class = field.class()?;
             let ptype_flags = ptype.flags()?;
             let struct_modifier = if ptype_flags.contains(TypeFlags::Container) {
                 "struct "

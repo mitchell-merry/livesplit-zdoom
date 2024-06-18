@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use asr::{string::ArrayCString, Address, Error, Process, print_message};
 use crate::name_manager::NameManager;
 use crate::pclass::PClass;
 use crate::tarray::TArray;
+use asr::{print_message, string::ArrayCString, Address, Error, Process};
 
 use super::Memory;
 
@@ -16,7 +16,12 @@ pub struct Level<'a> {
 }
 
 impl<'a> Level<'a> {
-    pub fn new(process: &'a Process, memory: Rc<Memory>, name_manager: Rc<NameManager<'a>>, address: Address) -> Level<'a> {
+    pub fn new(
+        process: &'a Process,
+        memory: Rc<Memory>,
+        name_manager: Rc<NameManager<'a>>,
+        address: Address,
+    ) -> Level<'a> {
         Level {
             process,
             memory,
@@ -52,7 +57,10 @@ impl<'a> Level<'a> {
     }
 
     pub fn find_actor(&self, actor_name: &str) -> Result<Address, Option<Error>> {
-        let sectors = TArray::new(self.process, self.address + self.memory.offsets.level_sectors);
+        let sectors = TArray::new(
+            self.process,
+            self.address + self.memory.offsets.level_sectors,
+        );
 
         for sector in sectors.iter_addr(0x310)? {
             let mut actor_next = sector + self.memory.offsets.sector_thinglist;
@@ -82,7 +90,10 @@ impl<'a> Level<'a> {
     }
 
     pub fn get_actor_names(&self, actor_class: &PClass<'a>) -> Result<Vec<String>, Error> {
-        let sectors = TArray::new(self.process, self.address + self.memory.offsets.level_sectors);
+        let sectors = TArray::new(
+            self.process,
+            self.address + self.memory.offsets.level_sectors,
+        );
 
         let mut actors = Vec::new();
 
@@ -104,7 +115,17 @@ impl<'a> Level<'a> {
                 let name = class.name()?;
                 actors.push(name.to_owned());
 
-                actor_next = Address::from(actor + actor_class.fields().unwrap().get("snext").unwrap().offset().unwrap().to_owned() as u64);
+                actor_next = Address::from(
+                    actor
+                        + actor_class
+                            .fields()
+                            .unwrap()
+                            .get("snext")
+                            .unwrap()
+                            .offset()
+                            .unwrap()
+                            .to_owned() as u64,
+                );
             }
         }
 

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::name_manager::NameManager;
-use asr::{Address, Error, print_message, Process};
+use asr::{print_message, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 
