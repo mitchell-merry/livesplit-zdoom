@@ -1,6 +1,6 @@
 extern crate proc_macro;
 
-use asr::{settings, timer};
+use asr::{print_message, settings, timer};
 use std::collections::HashSet;
 pub use paste::paste;
 
@@ -45,22 +45,38 @@ macro_rules! impl_auto_splitter_state {
 }
 
 pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
+    print_message(&format!("trying to split {key}"));
     let settings_map = settings::Map::load();
 
     if completed_splits.contains(key) {
         return false;
     }
 
-    if settings_map
-        .get(key)
-        .unwrap_or(settings::Value::from(false))
-        .get_bool()
-        .unwrap_or_default()
-    {
-        completed_splits.insert(key.to_owned());
-        timer::split();
-        true
-    } else {
-        false
+    let value = settings_map.get(key);
+
+    if value.is_none() {
+        print_message(&format!("-> {key} not found"));
+        return false;
     }
+
+    let value = value.unwrap().get_bool();
+    if value.is_none() {
+        print_message(&format!("-> {key} not a bool"));
+        return false;
+    }
+
+    if !value.unwrap() {
+        print_message(&format!("-> {key} set to false"));
+        return false;
+    }
+
+    if !completed_splits.insert(key.to_owned()) {
+        print_message(&format!("-> {key} already split"));
+        return false;
+    }
+
+    print_message(&format!("-> {key} split!"));
+    timer::split();
+
+    true
 }

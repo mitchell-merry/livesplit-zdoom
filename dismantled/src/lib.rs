@@ -23,8 +23,7 @@ const TRUE_ENDING_POSITION: DVector3 = DVector3 {
 #[derive(Gui)]
 struct Settings {
     /// Split on run end
-    #[default = true]
-    split_run_end: bool,
+    _item_noheartbeat: bool,
     /// Split on entering level
     #[heading_level = 0]
     split_entering_level: Title,
