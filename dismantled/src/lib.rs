@@ -164,6 +164,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
             && old.level == "map45"
             && current.level == "MAP01"
         {
+            completed_splits = HashSet::new();
             timer::start();
         }
 

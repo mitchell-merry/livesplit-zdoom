@@ -277,6 +277,7 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Opt
                 && old.gameaction == GameAction::NewGame
                 && current.gameaction != GameAction::NewGame
             {
+                completed_splits = HashSet::new();
                 timer::start();
                 asr::timer::set_game_time(Duration::ZERO);
             }

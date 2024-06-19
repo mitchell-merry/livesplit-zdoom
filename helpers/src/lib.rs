@@ -49,6 +49,7 @@ pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
     let settings_map = settings::Map::load();
 
     if completed_splits.contains(key) {
+        print_message(&format!("-> {key} already split"));
         return false;
     }
 
