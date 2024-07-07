@@ -48,7 +48,7 @@ impl<'a> Level<'a> {
 
         let name = c_str
             .validate_utf8()
-            .expect("name should always be utf-8")
+            .expect(&format!("name should always be utf-8. raw: {:?}", c_str.as_bytes()))
             .to_owned();
 
         self._name = Some(name.clone());

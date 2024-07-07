@@ -58,11 +58,6 @@ impl<'a> ZDoom<'a> {
             }
 
             let memory = memory.unwrap();
-            print_message(&format!("Found AllClasses at {}", memory.all_classes_addr));
-            print_message(&format!("Found players at {}", memory.players_addr));
-            print_message(&format!("Found NameData at {}", memory.namedata_addr));
-            print_message(&format!("Found level at {}", memory.level_addr));
-            print_message(&format!("Found gameaction at {}", memory.gameaction_addr));
 
             let memory = Rc::new(memory);
             let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
@@ -206,14 +201,15 @@ pub enum ZDoomVersion {
 
 type ScanFn = fn(process: &Process, module_range: (Address, u64)) -> Result<Address, Option<Error>>;
 
-fn find_addr_or_panic<const C: usize>(
+fn find_addr_or_panic(
     name: &str,
     process: &Process,
     module_range: (Address, u64),
     sigs: Vec<ScanFn>,
 ) -> Address {
-    for sig in sigs {
+    for (i, sig) in sigs.iter().enumerate() {
         if let Ok(addr) = sig(process, module_range) {
+            asr::print_message(&format!("Found {name} at 0x{addr} with signature index {i}"));
             return addr;
         }
     }
@@ -228,7 +224,7 @@ fn scan<const N: usize>(
     offset: u32,
     next_instruction: u32,
 ) -> Result<Address, Option<Error>> {
-    let addr = signature.scan_process_range(process, (addr, len))? + offset;
+    let addr = signature.scan_process_range(process, (addr, len)).ok_or(None)? + offset;
 
     Ok(addr + process.read::<u32>(addr)? + next_instruction)
 }
@@ -251,7 +247,7 @@ impl Memory {
     ) -> Result<Memory, Error> {
         let module_range = process.get_module_range(main_module_name)?;
 
-        let namedata_sigs = vec![
+        let namedata_sigs: Vec<ScanFn> = vec![
             |p, mr| {
                 scan(
                     Signature::<19>::new(
@@ -276,7 +272,7 @@ impl Memory {
             },
         ];
 
-        let players_sigs = vec![|p, mr| {
+        let players_sigs: Vec<ScanFn> = vec![|p, mr| {
             scan(
                 Signature::<18>::new("48 8D 05 ?? ?? ?? ?? 48 03 C8 E8 ?? ?? ?? ?? 48 63 05"),
                 p,
@@ -286,7 +282,7 @@ impl Memory {
             )
         }];
 
-        let all_classes_sigs = vec![
+        let all_classes_sigs: Vec<ScanFn> = vec![
             |p, mr| {
                 scan(
                     Signature::<22>::new(
@@ -305,7 +301,7 @@ impl Memory {
             },
         ];
 
-        let level_sigs = vec![
+        let level_sigs: Vec<ScanFn> = vec![
             |p, mr| {
                 scan(
                     Signature::<13>::new("75 D1 89 2D ?? ?? ?? ?? 8B 05 ?? ?? ??"),
@@ -316,22 +312,24 @@ impl Memory {
                 )
             },
             |p, mr| {
-                scan(
+                let a = p.read::<u64>(scan(
                     Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8"),
                     p,
                     mr,
                     0x3,
                     0x4,
-                )
+                )?);
+
+                Ok(a?.into())
             },
         ];
 
-        let gameaction_sigs = vec![|p, mr| {
+        let gameaction_sigs: Vec<ScanFn> = vec![|p, mr| {
             scan(
                 Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"),
                 p, mr, 0xF, 0x8
             )
-        }];
+        },];
 
         Ok(Memory {
             namedata_addr: find_addr_or_panic("namedata", process, module_range, namedata_sigs),
