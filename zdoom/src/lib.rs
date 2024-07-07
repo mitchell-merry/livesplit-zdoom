@@ -58,15 +58,15 @@ impl<'a> ZDoom<'a> {
             }
 
             let memory = memory.unwrap();
-            print_message(&format!("Found AllClasses at {}", memory.all_classes_addr));
-            print_message(&format!("Found players at {}", memory.players_addr));
-            print_message(&format!("Found NameData at {}", memory.namedata_addr));
-            print_message(&format!("Found level at {}", memory.level_addr));
-            print_message(&format!("Found gameaction at {}", memory.gameaction_addr));
 
             let memory = Rc::new(memory);
             let name_data = Rc::new(NameManager::new(process, memory.namedata_addr));
-            let level = Level::new(process, memory.clone(), name_data.clone(), memory.level_addr);
+            let level = Level::new(
+                process,
+                memory.clone(),
+                name_data.clone(),
+                memory.level_addr,
+            );
 
             let zdoom = ZDoom {
                 process,
@@ -199,6 +199,36 @@ pub enum ZDoomVersion {
     Gzdoom4_8_2,  // Snap the Sentinel
 }
 
+type ScanFn = fn(process: &Process, module_range: (Address, u64)) -> Result<Address, Option<Error>>;
+
+fn find_addr_or_panic(
+    name: &str,
+    process: &Process,
+    module_range: (Address, u64),
+    sigs: Vec<ScanFn>,
+) -> Address {
+    for (i, sig) in sigs.iter().enumerate() {
+        if let Ok(addr) = sig(process, module_range) {
+            asr::print_message(&format!("Found {name} at 0x{addr} with signature index {i}"));
+            return addr;
+        }
+    }
+
+    panic!("unable to find addr for {name}");
+}
+
+fn scan<const N: usize>(
+    signature: Signature<N>,
+    process: &Process,
+    (addr, len): (Address, u64),
+    offset: u32,
+    next_instruction: u32,
+) -> Result<Address, Option<Error>> {
+    let addr = signature.scan_process_range(process, (addr, len)).ok_or(None)? + offset;
+
+    Ok(addr + process.read::<u32>(addr)? + next_instruction)
+}
+
 pub struct Memory {
     namedata_addr: Address,
     players_addr: Address,
@@ -215,77 +245,110 @@ impl Memory {
         version: ZDoomVersion,
         main_module_name: &str,
     ) -> Result<Memory, Error> {
-        let main_exe_addr = process.get_module_address(main_module_name)?;
         let module_range = process.get_module_range(main_module_name)?;
 
-        match version {
-            // yes these should be signatures or something. TODO
-            ZDoomVersion::Lzdoom3_82 => Ok(Memory {
-                namedata_addr: scan_rel(
-                    process,
-                    module_range,
+        let namedata_sigs: Vec<ScanFn> = vec![
+            |p, mr| {
+                scan(
                     Signature::<19>::new(
                         "0F 84 ?? ?? ?? ?? 48 8B D1 41 B0 01 48 8D 0D ?? ?? ?? ??",
                     ),
+                    p,
+                    mr,
                     0xF,
                     0x4,
-                )?,
-                players_addr: scan_rel(
-                    process,
-                    module_range,
-                    Signature::<18>::new("48 8D 05 ?? ?? ?? ?? 48 03 C8 E8 ?? ?? ?? ?? 48 63 05"),
-                    0x3,
-                    0x4,
-                )?,
-                all_classes_addr: scan_rel(process, module_range, Signature::<22>::new("48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84"), 0x3, 0x4)?,
-                level_addr: scan_rel(process, module_range, Signature::<10>::new("75 D1 89 2D ?? ?? ?? ?? 8B 05"), 0x4, 0x4)?,
-                gameaction_addr: scan_rel(process, module_range, Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"), 0xF, 0x8)?,
-                offsets: Offsets::new(version),
-            }),
-            ZDoomVersion::Gzdoom4_8Pre | ZDoomVersion::Gzdoom4_8_2 => {
-                let namedata_addr = scan_rel(
-                    process,
-                    module_range,
+                )
+            },
+            |p, mr| {
+                scan(
                     Signature::<23>::new(
                         "45 33 C0 48 8B D6 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B C0 8B 15",
                     ),
+                    p,
+                    mr,
                     0x9,
                     0x4,
-                )?;
+                )
+            },
+        ];
 
-                let gameaction_addr = scan_rel(process, module_range, Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"), 0xF, 0x8)?;
+        let players_sigs: Vec<ScanFn> = vec![|p, mr| {
+            scan(
+                Signature::<18>::new("48 8D 05 ?? ?? ?? ?? 48 03 C8 E8 ?? ?? ?? ?? 48 63 05"),
+                p,
+                mr,
+                0x3,
+                0x4,
+            )
+        }];
 
-                let level_addr: Address = process
-                    .read::<u64>(scan_rel(
-                        process,
-                        module_range,
-                        Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8"),
-                        0x3,
-                        0x4,
-                    )?)?
-                    .into();
-
-                let s = Signature::<11>::new("48 8B 84 29 ?? ?? ?? ?? 48 85 C0");
-                let players_addr_offset = process.read::<u32>(
-                    s.scan_process_range(process, module_range)
-                        .unwrap_or_else(|| panic!("failed to get address"))
-                        + 0x4,
-                )?;
-
-                let all_classes_addr = scan_rel(process, module_range, Signature::<26>::new(
+        let all_classes_sigs: Vec<ScanFn> = vec![
+            |p, mr| {
+                scan(
+                    Signature::<22>::new(
+                        "48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84",
+                    ),
+                    p,
+                    mr,
+                    0x3,
+                    0x4,
+                )
+            },
+            |p, mr| {
+                scan(Signature::<26>::new(
                     "49 89 46 30 48 8B 1D ?? ?? ?? ?? 8B 05 ?? ?? ?? ?? 48 8D 3C C3 48 3B DF 0F 84",
-                ), 0x7, 0x4)?;
+                ), p, mr, 0x7, 0x4)
+            },
+        ];
 
-                Ok(Memory {
-                    namedata_addr,
-                    players_addr: main_exe_addr + players_addr_offset,
-                    all_classes_addr,
-                    level_addr,
-                    gameaction_addr,
-                    offsets: Offsets::new(version),
-                })
-            }
-        }
+        let level_sigs: Vec<ScanFn> = vec![
+            |p, mr| {
+                scan(
+                    Signature::<13>::new("75 D1 89 2D ?? ?? ?? ?? 8B 05 ?? ?? ??"),
+                    p,
+                    mr,
+                    0x4,
+                    0x4,
+                )
+            },
+            |p, mr| {
+                let a = p.read::<u64>(scan(
+                    Signature::<13>::new("48 8B 05 ?? ?? ?? ?? 48 39 03 75 09 E8"),
+                    p,
+                    mr,
+                    0x3,
+                    0x4,
+                )?);
+
+                Ok(a?.into())
+            },
+        ];
+
+        let gameaction_sigs: Vec<ScanFn> = vec![|p, mr| {
+            scan(
+                Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"),
+                p, mr, 0xF, 0x8
+            )
+        },];
+
+        Ok(Memory {
+            namedata_addr: find_addr_or_panic("namedata", process, module_range, namedata_sigs),
+            players_addr: find_addr_or_panic("players", process, module_range, players_sigs),
+            all_classes_addr: find_addr_or_panic(
+                "all_classes",
+                process,
+                module_range,
+                all_classes_sigs,
+            ),
+            level_addr: find_addr_or_panic("level", process, module_range, level_sigs),
+            gameaction_addr: find_addr_or_panic(
+                "gameaction",
+                process,
+                module_range,
+                gameaction_sigs,
+            ),
+            offsets: Offsets::new(version),
+        })
     }
 }
 
@@ -347,19 +410,4 @@ pub enum GameAction {
     Intro,
     Intermission,
     TitleLoop,
-}
-
-fn scan_rel<const N: usize>(
-    process: &Process,
-    module_range: (Address, u64),
-    signature: Signature<N>,
-    offset: u32,
-    next_instruction: u32,
-) -> Result<Address, Error> {
-    let addr = signature
-        .scan_process_range(process, module_range)
-        .unwrap_or_else(|| panic!("failed to get address for {signature:?}"))
-        + offset;
-
-    Ok(addr + process.read::<u32>(addr)? + next_instruction)
 }

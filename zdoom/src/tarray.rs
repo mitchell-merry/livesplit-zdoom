@@ -10,10 +10,7 @@ pub struct TArray<'a> {
 
 impl<'a> TArray<'a> {
     pub fn new(process: &'a Process, address: Address) -> TArray<'a> {
-        TArray {
-            process,
-            address,
-        }
+        TArray { process, address }
     }
 
     /// Iterate over each item in this TArray, reading the full item each time
@@ -49,7 +46,11 @@ pub struct TArrayAddressIterator<'a> {
 }
 
 impl<'a> TArrayAddressIterator<'a> {
-    fn new(process: &'a Process, address: Address, item_size: u64) -> Result<TArrayAddressIterator<'a>, Error> {
+    fn new(
+        process: &'a Process,
+        address: Address,
+        item_size: u64,
+    ) -> Result<TArrayAddressIterator<'a>, Error> {
         Ok(TArrayAddressIterator {
             process,
             address,
@@ -76,7 +77,6 @@ impl<'a> Iterator for TArrayAddressIterator<'a> {
         Some(self.array_addr + offset)
     }
 }
-
 
 pub struct TArrayIterator<'a, T: CheckedBitPattern> {
     _phantom: PhantomData<T>,

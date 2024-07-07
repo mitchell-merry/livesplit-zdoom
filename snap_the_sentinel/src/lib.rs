@@ -13,7 +13,6 @@ use helpers::{impl_auto_splitter_state, split};
 
 asr::async_main!(stable);
 
-
 #[derive(Gui)]
 struct Settings {
     /// Split on level completion
@@ -62,18 +61,17 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Error> {
-    let (mut zdoom, _) = ZDoom::wait_try_load(
-        process,
-        ZDoomVersion::Gzdoom4_8_2,
-        "gzdoom.exe",
-        |_| Ok(()),
-    )
-    .await;
+    let (mut zdoom, _) =
+        ZDoom::wait_try_load(process, ZDoomVersion::Gzdoom4_8_2, "gzdoom.exe", |_| Ok(())).await;
     // zdoom.dump();
     // if let Ok(p) = zdoom.player() {
     //     p.dump_inventories(&zdoom.name_data);
     // }
-    if zdoom.level.dump_actors(zdoom.classes().unwrap().get("Actor").unwrap()).is_err() {
+    if zdoom
+        .level
+        .dump_actors(zdoom.classes().unwrap().get("Actor").unwrap())
+        .is_err()
+    {
         print_message("there was an error, but good luck knowing what it was");
     }
 
@@ -141,11 +139,19 @@ async fn on_attach(process: &Process, settings: &mut Settings) -> Result<(), Err
 pub fn get_ocean_health(process: &Process, zdoom: &mut ZDoom) -> Option<u32> {
     let res: Result<u32, Option<Error>> = (|| {
         if zdoom.level.name()? != "E1M10" {
-            return Err(None)
+            return Err(None);
         }
 
         let ocean = zdoom.level.find_actor("DummyOcean")?;
-        let actor_health_offset = zdoom.classes()?.get("Actor").unwrap().fields()?.get("Health").unwrap().offset()?.to_owned();
+        let actor_health_offset = zdoom
+            .classes()?
+            .get("Actor")
+            .unwrap()
+            .fields()?
+            .get("Health")
+            .unwrap()
+            .offset()?
+            .to_owned();
 
         Ok(process.read::<u32>(ocean + actor_health_offset)?)
     })();
@@ -169,7 +175,8 @@ impl Watchers {
     fn update(&mut self, process: &Process, zdoom: &mut ZDoom) -> Result<(), Option<Error>> {
         zdoom.invalidate_cache().expect("");
 
-        self.gameaction.update(Some(zdoom.gameaction().unwrap_or_default()));
+        self.gameaction
+            .update(Some(zdoom.gameaction().unwrap_or_default()));
 
         let level_name = zdoom.level.name().map(|s| s.to_owned()).unwrap_or_default();
         self.level.update(Some(level_name));
@@ -180,7 +187,8 @@ impl Watchers {
         let player_pos = player.pos().map(|v| v.to_owned()).unwrap_or_default();
         self.player_pos.update(Some(player_pos));
 
-        self.ocean_health.update(Some(get_ocean_health(process, zdoom)));
+        self.ocean_health
+            .update(Some(get_ocean_health(process, zdoom)));
 
         Ok(())
     }
