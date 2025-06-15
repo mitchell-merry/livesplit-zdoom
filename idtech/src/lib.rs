@@ -1,11 +1,9 @@
 mod typeinfo;
 
-use std::time::{Duration};
-use std::{rc::Rc};
+use std::rc::Rc;
+use std::time::Duration;
 
-use asr::{
-    print_message, signature::Signature, Address, Error, Process,
-};
+use asr::{print_message, signature::Signature, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use typeinfo::*;
 
@@ -93,7 +91,6 @@ impl<'a> IdTech<'a> {
     }
 
     pub fn invalidate_cache(&mut self) -> Result<(), Error> {
-
         Ok(())
     }
 }
@@ -102,7 +99,7 @@ impl<'a> IdTech<'a> {
 // i have only tried this with a few games
 #[derive(Clone, Copy, Debug)]
 pub enum IdTechVersion {
-    IdTech8,   // Doom: The Dark Ages
+    IdTech8, // Doom: The Dark Ages
 }
 
 type ScanFn = fn(process: &Process, module_range: (Address, u64)) -> Result<Address, Option<Error>>;
@@ -115,7 +112,9 @@ fn find_addr_or_panic(
 ) -> Address {
     for (i, sig) in sigs.iter().enumerate() {
         if let Ok(addr) = sig(process, module_range) {
-            asr::print_message(&format!("Found {name} at 0x{addr} with signature index {i}"));
+            asr::print_message(&format!(
+                "Found {name} at 0x{addr} with signature index {i}"
+            ));
             return addr;
         }
     }
@@ -130,7 +129,10 @@ fn scan<const N: usize>(
     offset: u32,
     next_instruction: u32,
 ) -> Result<Address, Option<Error>> {
-    let addr = signature.scan_process_range(process, (addr, len)).ok_or(None)? + offset;
+    let addr = signature
+        .scan_process_range(process, (addr, len))
+        .ok_or(None)?
+        + offset;
 
     Ok(addr + process.read::<u32>(addr)? + next_instruction)
 }
@@ -149,9 +151,8 @@ impl Memory {
     ) -> Result<Memory, Error> {
         let module_range = process.get_module_range(main_module_name)?;
 
-        let typeinfo_sigs: Vec<ScanFn> = vec![
-            |p, mr| {
-                scan(
+        let typeinfo_sigs: Vec<ScanFn> = vec![|p, mr| {
+            scan(
                     Signature::<29>::new(
                         "48 8b fa 4c 89 41 08 48 8b d9 48 85 D2 74 25 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 89 03",
                     ),
@@ -160,8 +161,7 @@ impl Memory {
                     0x12,
                     0x4,
                 )
-            },
-        ];
+        }];
 
         Ok(Memory {
             typeinfo_addr: find_addr_or_panic("typeinfo", process, module_range, typeinfo_sigs),
@@ -170,14 +170,12 @@ impl Memory {
     }
 }
 
-struct Offsets {
-}
+struct Offsets {}
 
 impl Offsets {
     fn new(version: IdTechVersion) -> Self {
         match version {
-            IdTechVersion::IdTech8 => Self {
-            },
+            IdTechVersion::IdTech8 => Self {},
         }
     }
 }

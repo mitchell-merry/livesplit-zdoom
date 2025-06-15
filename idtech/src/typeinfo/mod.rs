@@ -1,10 +1,9 @@
-use std::iter::Once;
 // Please don't go after me idSoftware
 // I like you :)
-use once_cell::unsync::OnceCell;
-use asr::{Address, Error, Process};
-use asr::string::ArrayCString;
 use crate::typeinfo::class::ClassTypeInfo;
+use asr::string::ArrayCString;
+use asr::{Address, Error, Process};
+use once_cell::unsync::OnceCell;
 
 pub mod class;
 
@@ -22,7 +21,7 @@ pub struct TypeInfoTools<'a> {
     process: &'a Process,
     address: Address,
 
-    projects: OnceCell<Vec<TypeInfoProject<'a>>>
+    projects: OnceCell<Vec<TypeInfoProject<'a>>>,
 }
 
 impl<'a> TypeInfoTools<'a> {
@@ -39,7 +38,8 @@ impl<'a> TypeInfoTools<'a> {
         self.projects.get_or_try_init(|| {
             let mut projects = Vec::new();
 
-            let mut current_project = self.address.clone() + TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET;
+            let mut current_project =
+                self.address.clone() + TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET;
             // TODO: the range should be dynamic?
             for i in 0..2 {
                 projects.push(TypeInfoProject::new(&self.process, current_project.clone()));
@@ -60,7 +60,7 @@ pub struct TypeInfoProject<'a> {
     classes: OnceCell<Vec<ClassTypeInfo<'a>>>,
 }
 
-impl <'a> TypeInfoProject<'a> {
+impl<'a> TypeInfoProject<'a> {
     pub fn new(process: &'a Process, address: Address) -> TypeInfoProject<'a> {
         TypeInfoProject {
             process,
@@ -73,16 +73,20 @@ impl <'a> TypeInfoProject<'a> {
 
     pub fn name(&self) -> Result<&String, Error> {
         self.name.get_or_try_init(|| {
-            Ok(self.process
+            Ok(self
+                .process
                 .read_pointer_path::<ArrayCString<512>>(
                     self.address,
                     asr::PointerSize::Bit64,
-                    &[TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET, TYPE_INFO_PROJECT_NAME_OFFSET, 0x0],
+                    &[
+                        TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                        TYPE_INFO_PROJECT_NAME_OFFSET,
+                        0x0,
+                    ],
                 )?
                 .validate_utf8()
                 .expect("title should always be utf-8")
-                .to_owned()
-            )
+                .to_owned())
         })
     }
 }

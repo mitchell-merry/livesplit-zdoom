@@ -4,7 +4,7 @@ use asr::string::ArrayCString;
 use asr::time::Duration;
 use asr::{future::next_tick, timer, watcher::Watcher, Address, Error, Process};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use zdoom::pclass::PClass;
 use zdoom::tarray::TArray;
 use zdoom::{

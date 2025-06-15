@@ -25,8 +25,13 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Option<Error>> {
-    let (mut idtech, _) =
-        IdTech::wait_try_load(process, IdTechVersion::IdTech8, "DOOMTheDarkAges.exe", |_| Ok(())).await;
+    let (mut idtech, _) = IdTech::wait_try_load(
+        process,
+        IdTechVersion::IdTech8,
+        "DOOMTheDarkAges.exe",
+        |_| Ok(()),
+    )
+    .await;
 
     loop {
         next_tick().await;
