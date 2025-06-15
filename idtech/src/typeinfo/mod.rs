@@ -1,8 +1,10 @@
+use std::error::Error;
 // Please don't go after me idSoftware
 // I like you :)
 use crate::typeinfo::class::ClassTypeInfo;
 use asr::string::ArrayCString;
-use asr::{Address, Error, Process};
+use asr::{Address, Process};
+use helpers::error::SimpleError;
 use once_cell::unsync::OnceCell;
 
 pub mod class;
@@ -34,7 +36,7 @@ impl<'a> TypeInfoTools<'a> {
         }
     }
 
-    pub fn projects(&self) -> Result<&Vec<TypeInfoProject<'a>>, Error> {
+    pub fn projects(&self) -> Result<&Vec<TypeInfoProject<'a>>, Box<dyn Error>> {
         self.projects.get_or_try_init(|| {
             let mut projects = Vec::new();
 
@@ -71,7 +73,7 @@ impl<'a> TypeInfoProject<'a> {
         }
     }
 
-    pub fn name(&self) -> Result<&String, Error> {
+    pub fn name(&self) -> Result<&String, Box<dyn Error>> {
         self.name.get_or_try_init(|| {
             Ok(self
                 .process
@@ -83,9 +85,9 @@ impl<'a> TypeInfoProject<'a> {
                         TYPE_INFO_PROJECT_NAME_OFFSET,
                         0x0,
                     ],
-                )?
-                .validate_utf8()
-                .expect("title should always be utf-8")
+                )
+                .map_err(|_| SimpleError::from("failed to read name of project"))?
+                .validate_utf8()?
                 .to_owned())
         })
     }

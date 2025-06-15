@@ -1,7 +1,6 @@
 use asr::{future::next_tick, timer, watcher::Watcher, Error, Process};
 use idtech;
 
-#[macro_use]
 extern crate helpers;
 use idtech::{IdTech, IdTechVersion};
 
@@ -25,12 +24,9 @@ async fn main() {
 }
 
 async fn on_attach(process: &Process) -> Result<(), Option<Error>> {
-    let (mut idtech, _) = IdTech::wait_try_load(
-        process,
-        IdTechVersion::IdTech8,
-        "DOOMTheDarkAges.exe",
-        |_| Ok(()),
-    )
+    let mut idtech = helpers::try_load::wait_try_load::<IdTech, _, _>(async || {
+        IdTech::try_load(process, IdTechVersion::IdTech8, "DOOMTheDarkAges.exe").await
+    })
     .await;
 
     loop {

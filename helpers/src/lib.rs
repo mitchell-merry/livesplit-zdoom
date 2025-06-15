@@ -1,5 +1,7 @@
-mod try_load;
+pub mod error;
+pub mod try_load;
 
+extern crate core;
 extern crate proc_macro;
 
 use asr::{print_message, settings, timer};
