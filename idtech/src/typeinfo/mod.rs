@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 // Please don't go after me idSoftware
 // I like you :)
@@ -23,32 +24,30 @@ pub struct TypeInfoTools<'a> {
     process: &'a Process,
     address: Address,
 
-    projects: OnceCell<Vec<TypeInfoProject<'a>>>,
+    projects: HashMap<u64, TypeInfoProject<'a>>,
 }
 
 impl<'a> TypeInfoTools<'a> {
-    pub fn new(process: &'a Process, address: Address) -> TypeInfoTools<'a> {
-        TypeInfoTools {
+    pub fn try_load(
+        process: &'a Process,
+        address: Address,
+    ) -> Result<TypeInfoTools<'a>, Box<dyn Error>> {
+        let mut projects = HashMap::new();
+
+        let projects_base = address + TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET;
+        // TODO: should the range be dynamic?
+        for i in 0..2 {
+            let current_project = projects_base + i * TYPE_INFO_PROJECT_SIZE;
+            let project = TypeInfoProject::init(process, current_project.clone())?;
+            asr::print_message(&format!("  => Loading classes for {}", project.name));
+
+            projects.insert(i, project);
+        }
+
+        Ok(TypeInfoTools {
             process,
             address,
-
-            projects: OnceCell::new(),
-        }
-    }
-
-    pub fn projects(&self) -> Result<&Vec<TypeInfoProject<'a>>, Box<dyn Error>> {
-        self.projects.get_or_try_init(|| {
-            let mut projects = Vec::new();
-
-            let mut current_project =
-                self.address.clone() + TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET;
-            // TODO: the range should be dynamic?
-            for i in 0..2 {
-                projects.push(TypeInfoProject::new(&self.process, current_project.clone()));
-                current_project = current_project + TYPE_INFO_PROJECT_SIZE;
-            }
-
-            Ok(projects)
+            projects,
         })
     }
 }
@@ -58,37 +57,35 @@ pub struct TypeInfoProject<'a> {
     process: &'a Process,
     address: Address,
 
-    name: OnceCell<String>,
+    name: String,
     classes: OnceCell<Vec<ClassTypeInfo<'a>>>,
 }
 
 impl<'a> TypeInfoProject<'a> {
-    pub fn new(process: &'a Process, address: Address) -> TypeInfoProject<'a> {
-        TypeInfoProject {
+    pub fn init(
+        process: &'a Process,
+        address: Address,
+    ) -> Result<TypeInfoProject<'a>, Box<dyn Error>> {
+        let name = process
+            .read_pointer_path::<ArrayCString<512>>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_NAME_OFFSET,
+                    0x0,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to read name of project"))?
+            .validate_utf8()?
+            .to_owned();
+
+        Ok(TypeInfoProject {
             process,
             address,
 
-            name: OnceCell::new(),
+            name,
             classes: OnceCell::new(),
-        }
-    }
-
-    pub fn name(&self) -> Result<&String, Box<dyn Error>> {
-        self.name.get_or_try_init(|| {
-            Ok(self
-                .process
-                .read_pointer_path::<ArrayCString<512>>(
-                    self.address,
-                    asr::PointerSize::Bit64,
-                    &[
-                        TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
-                        TYPE_INFO_PROJECT_NAME_OFFSET,
-                        0x0,
-                    ],
-                )
-                .map_err(|_| SimpleError::from("failed to read name of project"))?
-                .validate_utf8()?
-                .to_owned())
         })
     }
 }

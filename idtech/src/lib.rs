@@ -36,18 +36,7 @@ impl<'a> IdTech<'a> {
             return Err(SimpleError::from("idtech: the typeinfo instance is null").into());
         }
 
-        let type_info = Rc::new(TypeInfoTools::new(process, typeinfo_instance));
-        let projects = type_info.projects();
-        if projects.is_err() {
-            let err = unsafe { projects.unwrap_err_unchecked() };
-            asr::print_message(&format!("  => {err}"));
-            return Err(err.into());
-        }
-
-        for i in projects? {
-            let name = i.name()?;
-            asr::print_message(&format!("  => found project {name}"));
-        }
+        let type_info = Rc::new(TypeInfoTools::try_load(process, typeinfo_instance)?);
 
         let idtech = IdTech {
             process,

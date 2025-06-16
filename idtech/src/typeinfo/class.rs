@@ -1,7 +1,10 @@
+use asr::{Address, Process};
 use std::cell::OnceCell;
 
-#[derive(Debug)]
 pub struct ClassTypeInfo<'a> {
-    name: OnceCell<&'a str>,
+    process: &'a Process,
+    address: Address,
+
+    name: String,
     size: OnceCell<u32>,
 }
