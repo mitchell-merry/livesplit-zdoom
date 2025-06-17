@@ -16,8 +16,15 @@ const TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET: u64 = 0x0;
 const TYPE_INFO_PROJECT_SIZE: u64 = 0x38;
 // typeInfoGenerated_t typeInfoGenerated;  // 0x00000 (size: 0x8) - type info generated with the TypeInfoGen
 const TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET: u64 = 0x0;
+
 // char projectName; // 0x00000 (size: 0x8) -
 const TYPE_INFO_PROJECT_NAME_OFFSET: u64 = 0x0;
+// classTypeInfo_t* classes
+const TYPE_INFO_PROJECT_CLASSES_OFFSET: u64 = 0x18;
+// int numClasses
+const TYPE_INFO_PROJECT_NUM_CLASSES_OFFSET: u64 = 0x20;
+
+const CLASS_TYPE_INFO_SIZE: u64 = 0x58;
 
 /** Mirrors the idTypeInfoTools class */
 pub struct TypeInfoTools<'a> {
@@ -39,8 +46,6 @@ impl<'a> TypeInfoTools<'a> {
         for i in 0..2 {
             let current_project = projects_base + i * TYPE_INFO_PROJECT_SIZE;
             let project = TypeInfoProject::init(process, current_project.clone())?;
-            asr::print_message(&format!("  => Loading classes for {}", project.name));
-
             projects.insert(i, project);
         }
 
@@ -58,7 +63,7 @@ pub struct TypeInfoProject<'a> {
     address: Address,
 
     name: String,
-    classes: OnceCell<Vec<ClassTypeInfo<'a>>>,
+    classes: HashMap<String, ClassTypeInfo<'a>>,
 }
 
 impl<'a> TypeInfoProject<'a> {
@@ -79,13 +84,52 @@ impl<'a> TypeInfoProject<'a> {
             .map_err(|_| SimpleError::from("failed to read name of project"))?
             .validate_utf8()?
             .to_owned();
+        asr::print_message(&format!("  => found project {name} at address {address}"));
+
+        let mut classes = HashMap::new();
+        let base_class_addr: Address = process
+            .read_pointer_path::<u64>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_CLASSES_OFFSET,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to get the base class address"))?
+            .into();
+        let num_classes = process
+            .read_pointer_path::<u32>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_NUM_CLASSES_OFFSET,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to get number of classes"))?
+            as u64;
+        asr::print_message(&format!("    => found {num_classes} classes"));
+        for class_index in 0u64..num_classes {
+            let class_addr = base_class_addr + class_index * CLASS_TYPE_INFO_SIZE;
+            let class_val = process
+                .read::<u64>(class_addr)
+                .map_err(|_| SimpleError::from("failed to read value at class address"))?;
+            if class_val == 0 {
+                break;
+            }
+            let class = ClassTypeInfo::init(process, class_addr)?;
+
+            classes.insert(class.name.clone(), class);
+        }
+        asr::print_message("    => finished preloading those classes");
 
         Ok(TypeInfoProject {
             process,
             address,
 
             name,
-            classes: OnceCell::new(),
+            classes,
         })
     }
 }
