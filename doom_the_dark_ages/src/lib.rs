@@ -1,5 +1,6 @@
-use asr::{future::next_tick, timer, watcher::Watcher, Error, Process};
+use asr::{future::next_tick, Process};
 use idtech;
+use std::error::Error;
 
 extern crate helpers;
 use idtech::{IdTech, IdTechVersion};
@@ -23,11 +24,16 @@ async fn main() {
     }
 }
 
-async fn on_attach(process: &Process) -> Result<(), Option<Error>> {
-    let mut idtech = helpers::try_load::wait_try_load::<IdTech, _, _>(async || {
+async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
+    let idtech = helpers::try_load::wait_try_load::<IdTech, _, _>(async || {
         IdTech::try_load(process, IdTechVersion::IdTech8, "DOOMTheDarkAges.exe").await
     })
     .await;
+
+    // Get the classes we need - we assume that they exist by now,
+    //   if they don't, it's a fatal error and we shouldn't retry
+    let game_system_local = idtech.get_class("Game", "idGameSystemLocal")?;
+    asr::print_message(&format!("found {}", game_system_local.name));
 
     loop {
         next_tick().await;

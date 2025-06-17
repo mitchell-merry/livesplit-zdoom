@@ -31,7 +31,7 @@ pub struct TypeInfoTools<'a> {
     process: &'a Process,
     address: Address,
 
-    projects: HashMap<u64, TypeInfoProject<'a>>,
+    projects: HashMap<String, TypeInfoProject<'a>>,
 }
 
 impl<'a> TypeInfoTools<'a> {
@@ -46,7 +46,7 @@ impl<'a> TypeInfoTools<'a> {
         for i in 0..2 {
             let current_project = projects_base + i * TYPE_INFO_PROJECT_SIZE;
             let project = TypeInfoProject::init(process, current_project.clone())?;
-            projects.insert(i, project);
+            projects.insert(project.name.clone(), project);
         }
 
         Ok(TypeInfoTools {
@@ -54,6 +54,10 @@ impl<'a> TypeInfoTools<'a> {
             address,
             projects,
         })
+    }
+
+    pub fn get_project(&self, project_name: &str) -> Option<&TypeInfoProject<'a>> {
+        self.projects.get(project_name)
     }
 }
 
@@ -131,5 +135,9 @@ impl<'a> TypeInfoProject<'a> {
             name,
             classes,
         })
+    }
+
+    pub fn get_class(&self, class_name: &str) -> Option<&ClassTypeInfo<'a>> {
+        self.classes.get(class_name)
     }
 }
