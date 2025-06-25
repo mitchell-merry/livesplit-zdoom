@@ -33,7 +33,7 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
     // Get the classes we need - we assume that they exist by now,
     //   if they don't, it's a fatal error and we shouldn't retry
     let game_system_local = idtech.get_class("Game", "idGameSystemLocal")?;
-    asr::print_message(&format!("found {}", game_system_local.name));
+    let state_offset = game_system_local.get_variable("state")?.get_offset()?;
 
     loop {
         next_tick().await;

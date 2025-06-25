@@ -2,11 +2,9 @@ mod typeinfo;
 
 use std::error::Error;
 use std::rc::Rc;
-use std::time::Duration;
 
 use crate::typeinfo::class::ClassTypeInfo;
 use asr::{signature::Signature, Address, Process};
-use bytemuck::CheckedBitPattern;
 use helpers::error::SimpleError;
 use typeinfo::*;
 
