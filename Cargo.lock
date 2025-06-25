@@ -91,9 +91,9 @@ name = "doom_the_dark_ages"
 version = "0.1.0"
 dependencies = [
  "asr",
+ "bytemuck",
  "helpers",
  "idtech",
- "paste",
 ]
 
 [[package]]
@@ -107,6 +107,8 @@ name = "helpers"
 version = "0.1.0"
 dependencies = [
  "asr",
+ "bytemuck",
+ "once_cell",
  "paste",
 ]
 

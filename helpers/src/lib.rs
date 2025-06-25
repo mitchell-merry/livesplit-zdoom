@@ -1,4 +1,6 @@
 pub mod error;
+pub mod memory;
+pub mod pointer;
 pub mod try_load;
 
 extern crate core;
