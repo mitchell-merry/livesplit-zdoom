@@ -6,8 +6,6 @@ use crate::typeinfo::class::ClassTypeInfo;
 use asr::string::ArrayCString;
 use asr::{Address, Process};
 use helpers::error::SimpleError;
-use once_cell::unsync::OnceCell;
-
 pub mod class;
 
 // idArray < idTypeInfoTools::registeredTypeInfo_t , 2 > generatedTypeInfo; // 0x00000 (size: 0x70) -

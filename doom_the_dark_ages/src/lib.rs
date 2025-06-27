@@ -1,14 +1,17 @@
 use asr::signature::Signature;
-use asr::{future::next_tick, PointerSize, Process};
+use asr::{future::next_tick, Process};
 use bytemuck::CheckedBitPattern;
-use helpers::error::SimpleError;
 use helpers::memory::scan_rel;
-use helpers::pointer::MemoryWatcher;
+use helpers::pointer::{Invalidatable, MemoryWatcher, PointerPath};
 use idtech;
 use std::error::Error;
 
 extern crate helpers;
+use crate::player::IdPlayer;
 use idtech::{IdTech, IdTechVersion};
+
+mod physics;
+mod player;
 
 asr::async_main!(stable);
 
@@ -58,6 +61,9 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
             ))
         }
 
+        let player = &memory.player;
+        let vel_x = player.velocity.x.current().unwrap_or(&0f32);
+
         // Prepare for the next iteration
         memory.next_tick();
 
@@ -69,6 +75,7 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
 
 struct Memory<'a> {
     state: MemoryWatcher<'a, IdGameSystemLocalState>,
+    player: IdPlayer<'a>,
 }
 
 impl<'a> Memory<'a> {
@@ -92,12 +99,26 @@ impl<'a> Memory<'a> {
             state: MemoryWatcher::<IdGameSystemLocalState>::new(
                 process,
                 game_system_local,
-                Vec::from(&[idtech.get_offset("Game", "idGameSystemLocal", "state")?]),
+                &[idtech.get_offset("Game", "idGameSystemLocal", "state")?],
             ),
+            player: IdPlayer::init(
+                &idtech,
+                PointerPath::new(
+                    process,
+                    game_system_local,
+                    &[
+                        idtech.get_offset("Game", "idGameSystemLocal", "mapInstance")?,
+                        0x1988,
+                        0xC0,
+                        0x0,
+                    ],
+                ),
+            )?,
         })
     }
 
     pub fn next_tick(&mut self) {
         self.state.next_tick();
+        self.player.next_tick();
     }
 }

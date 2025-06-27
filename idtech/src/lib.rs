@@ -51,7 +51,7 @@ impl<'a> IdTech<'a> {
         project_name: &str,
         class_name: &str,
         variable_name: &str,
-    ) -> Result<u32, Box<dyn Error>> {
+    ) -> Result<u64, Box<dyn Error>> {
         let class = self.get_class(project_name, class_name)?;
         Ok(class.get_variable(variable_name)?.get_offset()?.clone())
     }

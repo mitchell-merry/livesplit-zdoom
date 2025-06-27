@@ -8,6 +8,7 @@ asr = { git = "https://github.com/LiveSplit/asr", features = ["derive"] }
 bytemuck = "1.23.1"
 helpers = { path = "../helpers" }
 idtech = { path = "../idtech" }
+once_cell = "1.19.0"
 
 [lib]
 crate-type = ["cdylib"]

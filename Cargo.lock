@@ -94,6 +94,7 @@ dependencies = [
  "bytemuck",
  "helpers",
  "idtech",
+ "once_cell",
 ]
 
 [[package]]

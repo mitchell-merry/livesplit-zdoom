@@ -85,6 +85,10 @@ impl<'a> ClassTypeInfo<'a> {
 
         Ok(variable)
     }
+
+    pub fn get_offset(&self, variable: &str) -> Result<u64, Box<dyn Error>> {
+        Ok(self.get_variable(variable)?.get_offset()?.clone())
+    }
 }
 
 // representation of the classVariableInfo_t class
@@ -93,7 +97,7 @@ pub struct ClassVariableInfo<'a> {
     address: Address64,
 
     pub name: String,
-    offset: OnceCell<u32>,
+    offset: OnceCell<u64>,
 }
 
 impl<'a> ClassVariableInfo<'a> {
@@ -120,7 +124,7 @@ impl<'a> ClassVariableInfo<'a> {
         })
     }
 
-    pub fn get_offset(&self) -> Result<&u32, Box<dyn Error>> {
+    pub fn get_offset(&self) -> Result<&u64, Box<dyn Error>> {
         self.offset.get_or_try_init(|| {
             let offset = self
                 .process
@@ -129,7 +133,7 @@ impl<'a> ClassVariableInfo<'a> {
                     SimpleError::from(&format!("failed to read offset of variable {}", self.name))
                 })?;
 
-            Ok(offset)
+            Ok(offset.into())
         })
     }
 }
