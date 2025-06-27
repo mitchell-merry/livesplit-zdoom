@@ -46,34 +46,10 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
     })
     .await;
 
-    let game_system_local = scan_rel(
-        &GAME_SYSTEM_LOCAL_SIG,
-        process,
-        "DOOMTheDarkAges.exe",
-        0x6,
-        0x4,
-    )?;
-    asr::print_message(&format!(
-        "=> found idGameSystemLocal ptr at 0x{}",
-        game_system_local
-    ));
-    // let game_system_local = process
-    //     .read_pointer(game_system_local_ptr, PointerSize::Bit64)
-    //     .map_err(|_| SimpleError::from("unable to read idGameSystemLocal pointer"))?;
-    // asr::print_message(&format!(
-    //     "=> found idGameSystemLocal instance at 0x{}",
-    //     game_system_local
-    // ));
-
-    // Get the classes we need - we assume that they exist by now,
-    //   if they don't, it's a fatal error and we shouldn't retry
-    let mut state = MemoryWatcher::<IdGameSystemLocalState, 1>::new(
-        process,
-        game_system_local,
-        [idtech.get_offset("Game", "idGameSystemLocal", "state")? as u64],
-    );
+    let mut memory = Memory::init(process, idtech)?;
 
     loop {
+        let state = &memory.state;
         if state.changed()? {
             asr::print_message(&format!(
                 "state changed from {:?} to {:?}",
@@ -83,10 +59,45 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
         }
 
         // Prepare for the next iteration
-        state.next_tick();
+        memory.next_tick();
 
         next_tick().await;
     }
 
     Ok(())
+}
+
+struct Memory<'a> {
+    state: MemoryWatcher<'a, IdGameSystemLocalState>,
+}
+
+impl<'a> Memory<'a> {
+    pub fn init(process: &'a Process, idtech: IdTech<'a>) -> Result<Self, Box<dyn Error>> {
+        let game_system_local = scan_rel(
+            &GAME_SYSTEM_LOCAL_SIG,
+            process,
+            "DOOMTheDarkAges.exe",
+            0x6,
+            0x4,
+        )?;
+        asr::print_message(&format!(
+            "=> found idGameSystemLocal ptr at 0x{}",
+            game_system_local
+        ));
+
+        // Get the classes we need - we assume that they exist by now,
+        //   if they don't, it's a fatal error and we shouldn't retry
+
+        Ok(Memory {
+            state: MemoryWatcher::<IdGameSystemLocalState>::new(
+                process,
+                game_system_local,
+                Vec::from(&[idtech.get_offset("Game", "idGameSystemLocal", "state")?]),
+            ),
+        })
+    }
+
+    pub fn next_tick(&mut self) {
+        self.state.next_tick();
+    }
 }

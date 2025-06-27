@@ -3,24 +3,23 @@ use asr::{Address, PointerSize, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 use std::error::Error;
+use std::fmt::Debug;
 
-pub struct MemoryWatcher<'a, T: CheckedBitPattern, const N: usize> {
+pub struct MemoryWatcher<'a, T: CheckedBitPattern> {
     process: &'a Process,
     base_address: Address,
-    path: [u64; N],
+    path: Vec<u64>,
 
     current: OnceCell<T>,
     old: Option<T>,
 }
 
-impl<'a, T: CheckedBitPattern + PartialEq + std::fmt::Debug, const N: usize>
-    MemoryWatcher<'a, T, N>
-{
-    pub fn new(process: &'a Process, base_address: Address, path: [u64; N]) -> Self {
+impl<'a, T: CheckedBitPattern + PartialEq + Debug> MemoryWatcher<'a, T> {
+    pub fn new(process: &'a Process, base_address: Address, path: Vec<impl Into<u64>>) -> Self {
         MemoryWatcher {
             process,
             base_address,
-            path,
+            path: path.into_iter().map(Into::into).collect(),
 
             current: OnceCell::new(),
             old: None,
