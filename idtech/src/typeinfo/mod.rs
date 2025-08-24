@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-use std::error::Error;
 // Please don't go after me idSoftware
 // I like you :)
 use crate::typeinfo::class::ClassTypeInfo;
 use asr::string::ArrayCString;
 use asr::{Address, Process};
 use helpers::error::SimpleError;
-use once_cell::unsync::OnceCell;
-
+use std::collections::HashMap;
+use std::error::Error;
 pub mod class;
 
 // idArray < idTypeInfoTools::registeredTypeInfo_t , 2 > generatedTypeInfo; // 0x00000 (size: 0x70) -
@@ -16,15 +14,22 @@ const TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET: u64 = 0x0;
 const TYPE_INFO_PROJECT_SIZE: u64 = 0x38;
 // typeInfoGenerated_t typeInfoGenerated;  // 0x00000 (size: 0x8) - type info generated with the TypeInfoGen
 const TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET: u64 = 0x0;
+
 // char projectName; // 0x00000 (size: 0x8) -
 const TYPE_INFO_PROJECT_NAME_OFFSET: u64 = 0x0;
+// classTypeInfo_t* classes
+const TYPE_INFO_PROJECT_CLASSES_OFFSET: u64 = 0x18;
+// int numClasses
+const TYPE_INFO_PROJECT_NUM_CLASSES_OFFSET: u64 = 0x20;
+
+const CLASS_TYPE_INFO_SIZE: u64 = 0x58;
 
 /** Mirrors the idTypeInfoTools class */
 pub struct TypeInfoTools<'a> {
     process: &'a Process,
     address: Address,
 
-    projects: HashMap<u64, TypeInfoProject<'a>>,
+    projects: HashMap<String, TypeInfoProject<'a>>,
 }
 
 impl<'a> TypeInfoTools<'a> {
@@ -39,9 +44,7 @@ impl<'a> TypeInfoTools<'a> {
         for i in 0..2 {
             let current_project = projects_base + i * TYPE_INFO_PROJECT_SIZE;
             let project = TypeInfoProject::init(process, current_project.clone())?;
-            asr::print_message(&format!("  => Loading classes for {}", project.name));
-
-            projects.insert(i, project);
+            projects.insert(project.name.clone(), project);
         }
 
         Ok(TypeInfoTools {
@@ -49,6 +52,10 @@ impl<'a> TypeInfoTools<'a> {
             address,
             projects,
         })
+    }
+
+    pub fn get_project(&self, project_name: &str) -> Option<&TypeInfoProject<'a>> {
+        self.projects.get(project_name)
     }
 }
 
@@ -58,7 +65,7 @@ pub struct TypeInfoProject<'a> {
     address: Address,
 
     name: String,
-    classes: OnceCell<Vec<ClassTypeInfo<'a>>>,
+    classes: HashMap<String, ClassTypeInfo<'a>>,
 }
 
 impl<'a> TypeInfoProject<'a> {
@@ -79,13 +86,56 @@ impl<'a> TypeInfoProject<'a> {
             .map_err(|_| SimpleError::from("failed to read name of project"))?
             .validate_utf8()?
             .to_owned();
+        asr::print_message(&format!("  => found project {name} at address {address}"));
+
+        let mut classes = HashMap::new();
+        let base_class_addr: Address = process
+            .read_pointer_path::<u64>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_CLASSES_OFFSET,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to get the base class address"))?
+            .into();
+        let num_classes = process
+            .read_pointer_path::<u32>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_NUM_CLASSES_OFFSET,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to get number of classes"))?
+            as u64;
+        asr::print_message(&format!("    => found {num_classes} classes"));
+        for class_index in 0u64..num_classes {
+            let class_addr = base_class_addr + class_index * CLASS_TYPE_INFO_SIZE;
+            let class_val = process
+                .read::<u64>(class_addr)
+                .map_err(|_| SimpleError::from("failed to read value at class address"))?;
+            if class_val == 0 {
+                break;
+            }
+            let class = ClassTypeInfo::init(process, class_addr)?;
+
+            classes.insert(class.name.clone(), class);
+        }
+        asr::print_message("    => finished preloading those classes");
 
         Ok(TypeInfoProject {
             process,
             address,
 
             name,
-            classes: OnceCell::new(),
+            classes,
         })
+    }
+
+    pub fn get_class(&self, class_name: &str) -> Option<&ClassTypeInfo<'a>> {
+        self.classes.get(class_name)
     }
 }
