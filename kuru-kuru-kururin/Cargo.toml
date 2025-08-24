@@ -1,0 +1,22 @@
+[package]
+name = "kuru-kuru-kururin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+#asr = { git = "https://github.com/LiveSplit/asr", features = ["derive", "gba"] }
+asr = { path = "../../asr", features = ["derive", "gba"] }
+bitflags = "2.5.0"
+helpers = { path = "../helpers" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true
+
+[profile.release.build-override]
+opt-level = 0
