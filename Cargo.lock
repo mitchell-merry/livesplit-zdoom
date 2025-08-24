@@ -69,6 +69,9 @@ name = "bitflags"
 version = "2.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34efbcccd345379ca2868b2b2c9d3782e9cc58ba87bc7d79d5b53d9c9ae6f25d"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "bytemuck"
@@ -130,7 +133,7 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 name = "helpers"
 version = "0.1.0"
 dependencies = [
- "asr 0.1.0 (git+https://github.com/LiveSplit/asr)",
+ "asr 0.1.0",
  "bytemuck",
  "once_cell",
  "paste",
@@ -154,6 +157,7 @@ version = "0.1.0"
 dependencies = [
  "asr 0.1.0",
  "bitflags",
+ "bytemuck",
  "helpers",
 ]
 

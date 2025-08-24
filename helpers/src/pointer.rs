@@ -1,4 +1,6 @@
 use crate::error::SimpleError;
+#[cfg(feature = "gba")]
+use asr::emulator::gba::Emulator;
 use asr::{Address, PointerSize, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
@@ -6,16 +8,73 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::iter::once;
 
-pub struct PointerPath<'a> {
-    process: &'a Process,
-    base_address: Address,
-    path: Vec<u64>,
+pub trait Readable {
+    fn read_pointer_path<T: CheckedBitPattern>(
+        &self,
+        address: impl Into<Address>,
+        pointer_size: PointerSize,
+        path: &[u64],
+    ) -> Result<T, Box<dyn Error>>;
 }
 
-impl<'a> PointerPath<'a> {
-    pub fn new(process: &'a Process, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
+// pub struct ProcessReadable<'a> {
+//     process: &'a Process,
+// }
+
+impl<'a> Readable for Process {
+    fn read_pointer_path<T: CheckedBitPattern>(
+        &self,
+        address: impl Into<Address>,
+        pointer_size: PointerSize,
+        path: &[u64],
+    ) -> Result<T, Box<dyn Error>> {
+        self.read_pointer_path::<T>(address, pointer_size, &path)
+            .map_err(|_| SimpleError::from("unable to read value from pointer path").into())
+    }
+}
+
+#[cfg(feature = "gba")]
+impl<'a> Readable for Emulator {
+    fn read_pointer_path<T: CheckedBitPattern>(
+        &self,
+        address: impl Into<Address>,
+        _pointer_size: PointerSize,
+        path: &[u64],
+    ) -> Result<T, Box<dyn Error>> {
+        let path = path.iter().map(|o| *o as u32).collect::<Vec<u32>>();
+        let path = path.as_slice();
+        self.read_pointer_path::<T>(address.into().value() as u32, path)
+            .map_err(|_| SimpleError::from("unable to read value from pointer path").into())
+    }
+}
+
+// impl<'a> From<&'a Process> for ProcessReadable<'a> {
+//     fn from(value: &'a Process) -> Self {
+//         ProcessReadable { process: value }
+//     }
+// }
+
+pub struct PointerPath<'a, R: Readable + ?Sized> {
+    readable: &'a R,
+    base_address: Address,
+    path: Vec<u64>,
+    pointer_size: PointerSize,
+}
+
+impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
+    pub fn new(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
         PointerPath {
-            process,
+            readable,
+            pointer_size: PointerSize::Bit64,
+            base_address,
+            path: path.into(),
+        }
+    }
+
+    pub fn new32(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
+        PointerPath {
+            readable,
+            pointer_size: PointerSize::Bit32,
             base_address,
             path: path.into(),
         }
@@ -31,23 +90,22 @@ impl<'a> PointerPath<'a> {
         let original_last = *original_last;
         let new_middle_offset = original_last + child_prefix;
 
-        PointerPath::new(
-            self.process,
-            self.base_address,
-            original_prefix
+        PointerPath {
+            readable: self.readable,
+            pointer_size: self.pointer_size,
+            base_address: self.base_address,
+            path: original_prefix
                 .to_owned()
                 .into_iter()
                 .chain(once(new_middle_offset))
                 .chain(rest.to_owned())
                 .collect::<Vec<_>>(),
-        )
+        }
     }
 
     pub fn read<T: CheckedBitPattern>(&self) -> Result<T, Box<dyn Error>> {
-        Ok(self
-            .process
-            .read_pointer_path::<T>(self.base_address, PointerSize::Bit64, &self.path)
-            .map_err(|_| SimpleError::from("unable to read value from pointer path"))?)
+        self.readable
+            .read_pointer_path(self.base_address, self.pointer_size, &self.path)
     }
 }
 
@@ -55,15 +113,15 @@ pub trait Invalidatable {
     fn next_tick(&mut self);
 }
 
-pub struct MemoryWatcher<'a, T: CheckedBitPattern> {
-    path: PointerPath<'a>,
+pub struct MemoryWatcher<'a, R: Readable + ?Sized, T: CheckedBitPattern> {
+    path: PointerPath<'a, R>,
     current: OnceCell<T>,
     old: Option<T>,
 }
 
-impl<'a, T: CheckedBitPattern + PartialEq + Debug> MemoryWatcher<'a, T> {
-    pub fn new(process: &'a Process, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
-        PointerPath::new(process, base_address, path).into()
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug> MemoryWatcher<'a, R, T> {
+    pub fn new(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
+        PointerPath::new(readable, base_address, path).into()
     }
 
     pub fn current(&self) -> Result<&T, Box<dyn Error>> {
@@ -80,17 +138,35 @@ impl<'a, T: CheckedBitPattern + PartialEq + Debug> MemoryWatcher<'a, T> {
             Some(old) => Ok(&old != self.current()?),
         }
     }
+
+    pub fn child(&self, path: impl Into<Vec<u64>>) -> Self {
+        self.path.child(path).into()
+    }
 }
 
-impl<'a, T: CheckedBitPattern> Invalidatable for MemoryWatcher<'a, T> {
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug + Clone>
+    MemoryWatcher<'a, R, T>
+{
+    pub fn current_owned(&self) -> Result<T, Box<dyn Error>> {
+        Ok(self.current()?.to_owned())
+    }
+
+    pub fn old_owned(&self) -> Option<T> {
+        self.old.clone()
+    }
+}
+
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> Invalidatable for MemoryWatcher<'a, R, T> {
     fn next_tick(&mut self) {
         self.old = self.current.get().copied();
         self.current = OnceCell::new();
     }
 }
 
-impl<'a, T: CheckedBitPattern> From<PointerPath<'a>> for MemoryWatcher<'a, T> {
-    fn from(value: PointerPath<'a>) -> Self {
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> From<PointerPath<'a, R>>
+    for MemoryWatcher<'a, R, T>
+{
+    fn from(value: PointerPath<'a, R>) -> Self {
         MemoryWatcher {
             path: value,
             current: OnceCell::new(),
