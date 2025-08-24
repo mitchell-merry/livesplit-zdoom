@@ -1,0 +1,91 @@
+use std::collections::HashMap;
+use std::error::Error;
+// Please don't go after me idSoftware
+// I like you :)
+use crate::typeinfo::class::ClassTypeInfo;
+use asr::string::ArrayCString;
+use asr::{Address, Process};
+use helpers::error::SimpleError;
+use once_cell::unsync::OnceCell;
+
+pub mod class;
+
+// idArray < idTypeInfoTools::registeredTypeInfo_t , 2 > generatedTypeInfo; // 0x00000 (size: 0x70) -
+const TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET: u64 = 0x0;
+
+const TYPE_INFO_PROJECT_SIZE: u64 = 0x38;
+// typeInfoGenerated_t typeInfoGenerated;  // 0x00000 (size: 0x8) - type info generated with the TypeInfoGen
+const TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET: u64 = 0x0;
+// char projectName; // 0x00000 (size: 0x8) -
+const TYPE_INFO_PROJECT_NAME_OFFSET: u64 = 0x0;
+
+/** Mirrors the idTypeInfoTools class */
+pub struct TypeInfoTools<'a> {
+    process: &'a Process,
+    address: Address,
+
+    projects: HashMap<u64, TypeInfoProject<'a>>,
+}
+
+impl<'a> TypeInfoTools<'a> {
+    pub fn try_load(
+        process: &'a Process,
+        address: Address,
+    ) -> Result<TypeInfoTools<'a>, Box<dyn Error>> {
+        let mut projects = HashMap::new();
+
+        let projects_base = address + TYPE_INFO_TOOLS_GENERATED_TYPE_INFO_OFFSET;
+        // TODO: should the range be dynamic?
+        for i in 0..2 {
+            let current_project = projects_base + i * TYPE_INFO_PROJECT_SIZE;
+            let project = TypeInfoProject::init(process, current_project.clone())?;
+            asr::print_message(&format!("  => Loading classes for {}", project.name));
+
+            projects.insert(i, project);
+        }
+
+        Ok(TypeInfoTools {
+            process,
+            address,
+            projects,
+        })
+    }
+}
+
+/** Mirrors the idTypeInfoTools::registeredTypeInfo_t class, which has a projectName */
+pub struct TypeInfoProject<'a> {
+    process: &'a Process,
+    address: Address,
+
+    name: String,
+    classes: OnceCell<Vec<ClassTypeInfo<'a>>>,
+}
+
+impl<'a> TypeInfoProject<'a> {
+    pub fn init(
+        process: &'a Process,
+        address: Address,
+    ) -> Result<TypeInfoProject<'a>, Box<dyn Error>> {
+        let name = process
+            .read_pointer_path::<ArrayCString<512>>(
+                address,
+                asr::PointerSize::Bit64,
+                &[
+                    TYPE_INFO_PROJECT_TYPE_INFO_GENERATED_OFFSET,
+                    TYPE_INFO_PROJECT_NAME_OFFSET,
+                    0x0,
+                ],
+            )
+            .map_err(|_| SimpleError::from("failed to read name of project"))?
+            .validate_utf8()?
+            .to_owned();
+
+        Ok(TypeInfoProject {
+            process,
+            address,
+
+            name,
+            classes: OnceCell::new(),
+        })
+    }
+}

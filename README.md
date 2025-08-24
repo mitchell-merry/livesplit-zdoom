@@ -16,7 +16,7 @@ install the Rust compiler: [Install Rust](https://www.rust-lang.org/tools/instal
 
 Afterwards install the WebAssembly target:
 ```sh
-rustup target add wasm32-wasi --toolchain nightly
+rustup target add wasm32-wasip1 --toolchain nightly
 ```
 
 The autosplitters can now be compiled:
@@ -24,9 +24,9 @@ The autosplitters can now be compiled:
 cargo b --release
 ```
 
-The autosplitters is then available at:
+The autosplitters are then available at:
 ```
-target/wasm32-wasi/release/<name>.wasm
+target/wasm32-wasip1/release/<name>.wasm
 ```
 
 Make sure to look into the [API documentation](https://livesplit.org/asr/asr/) for the `asr` crate.

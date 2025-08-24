@@ -1,13 +1,16 @@
 [package]
-name = "helpers"
+name = "doom_the_dark_ages"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-asr = { git = "https://github.com/LiveSplit/asr", features = ["derive"] }
+asr = { git = "https://github.com/LiveSplit/asr", features = [ "derive" ] }
+helpers = { path = "../helpers" }
 paste = "1.0.15"
+idtech = { path = "../idtech" }
 
 [lib]
+crate-type = ["cdylib"]
 
 [profile.release]
 lto = true

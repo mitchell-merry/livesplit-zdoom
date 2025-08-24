@@ -1,7 +1,7 @@
-use std::collections::HashSet;
-use asr::{future::next_tick, timer, watcher::Watcher, Error, Process, print_message};
-use asr::settings::Gui;
 use asr::settings::gui::Title;
+use asr::settings::Gui;
+use asr::{future::next_tick, print_message, timer, watcher::Watcher, Error, Process};
+use std::collections::HashSet;
 use zdoom::{
     player::{DVector3, PlayerState},
     GameAction, ZDoom, ZDoomVersion,
