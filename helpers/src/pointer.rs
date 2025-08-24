@@ -17,10 +17,6 @@ pub trait Readable {
     ) -> Result<T, Box<dyn Error>>;
 }
 
-// pub struct ProcessReadable<'a> {
-//     process: &'a Process,
-// }
-
 impl<'a> Readable for Process {
     fn read_pointer_path<T: CheckedBitPattern>(
         &self,
@@ -47,12 +43,6 @@ impl<'a> Readable for Emulator {
             .map_err(|_| SimpleError::from("unable to read value from pointer path").into())
     }
 }
-
-// impl<'a> From<&'a Process> for ProcessReadable<'a> {
-//     fn from(value: &'a Process) -> Self {
-//         ProcessReadable { process: value }
-//     }
-// }
 
 pub struct PointerPath<'a, R: Readable + ?Sized> {
     readable: &'a R,
@@ -101,6 +91,13 @@ impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
                 .chain(rest.to_owned())
                 .collect::<Vec<_>>(),
         }
+    }
+
+    pub fn child_watcher<T: CheckedBitPattern>(
+        &self,
+        path: impl Into<Vec<u64>>,
+    ) -> MemoryWatcher<'a, R, T> {
+        self.child(path).into()
     }
 
     pub fn read<T: CheckedBitPattern>(&self) -> Result<T, Box<dyn Error>> {

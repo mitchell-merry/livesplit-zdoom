@@ -1,14 +1,15 @@
 #[macro_use]
 extern crate helpers;
+
 use asr::emulator::gba::Emulator;
 use asr::future::next_tick;
 use asr::settings::Gui;
 use asr::time::Duration;
 use asr::timer::{set_game_time, set_variable, start};
-use asr::Error;
 use bitflags::{bitflags, Flags};
 use bytemuck::{CheckedBitPattern, Pod, Zeroable};
 use helpers::pointer::{Invalidatable, MemoryWatcher, PointerPath};
+use std::error::Error;
 use std::fmt::Debug;
 
 asr::async_main!(stable);
@@ -83,7 +84,7 @@ fn get_in_game_time(frames: u32) -> Duration {
     Duration::seconds_f32((frames as f32) / 60_f32)
 }
 
-async fn on_attach(emulator: &Emulator, _settings: &mut Settings) -> Result<(), Option<Error>> {
+async fn on_attach(emulator: &Emulator, _settings: &mut Settings) -> Result<(), Box<dyn Error>> {
     asr::print_message("Attached!");
     set_variable(
         "ram base (ewram)",
@@ -93,28 +94,36 @@ async fn on_attach(emulator: &Emulator, _settings: &mut Settings) -> Result<(), 
         "ram base (iwram)",
         &format!("0x{}", emulator.ram_base.get().unwrap().get(1).unwrap()),
     );
-    let some_important_thing = PointerPath::new32(emulator, 0x03004420_u64.into(), &[0x18, 0x0]);
+    let base = PointerPath::new32(emulator, 0x3004420_u64.into(), &[]);
+    let mut world: MemoryWatcher<_, u8> = base.child(&[0x0]).into();
+    let mut sub_level: MemoryWatcher<_, u8> = base.child(&[0x1]).into();
 
-    let mut time_pointer: MemoryWatcher<_, u32> = some_important_thing.child(&[0xB8]).into();
+    let some_important_thing = base.child(&[0x18, 0x0]);
+
+    let mut time: MemoryWatcher<_, u32> = some_important_thing.child(&[0xB8]).into();
     let mut flags_pointer: MemoryWatcher<_, GameFlags> = some_important_thing.child(&[0xBC]).into();
 
     while emulator.is_open() {
-        let time = time_pointer.current_owned().unwrap_or(0);
-        set_variable("time (frames)", &format!("{time}"));
+        set_variable("time (frames)", &format!("{}", time.current_owned()?));
 
         let old_flags = flags_pointer.old_owned().unwrap_or_default();
-        let flags = flags_pointer.current_owned().unwrap_or_default();
+        let flags = flags_pointer.current_owned()?;
         set_variable("flags", &format!("{:08x}", flags.bits()));
         set_variable("flags (interpreted)", &format!("{:?}", flags));
+
+        set_variable("world", &format!("{}", world.current_owned()?));
+        set_variable("sub level", &format!("{:?}", sub_level.current_owned()?));
 
         // Ok
         if !old_flags.contains(GameFlags::HasStarted) && flags.contains(GameFlags::HasStarted) {
             start();
         }
 
-        set_game_time(get_in_game_time(time));
+        set_game_time(get_in_game_time(time.current_owned()?));
 
-        time_pointer.next_tick();
+        world.next_tick();
+        sub_level.next_tick();
+        time.next_tick();
         flags_pointer.next_tick();
         next_tick().await;
     }
