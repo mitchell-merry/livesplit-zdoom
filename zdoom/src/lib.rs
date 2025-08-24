@@ -1,9 +1,7 @@
-use std::time::{Duration};
+use std::time::Duration;
 use std::{collections::HashMap, rc::Rc};
 
-use asr::{
-    print_message, signature::Signature, Address, Error, Process,
-};
+use asr::{print_message, signature::Signature, Address, Error, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 
@@ -209,7 +207,9 @@ fn find_addr_or_panic(
 ) -> Address {
     for (i, sig) in sigs.iter().enumerate() {
         if let Ok(addr) = sig(process, module_range) {
-            asr::print_message(&format!("Found {name} at 0x{addr} with signature index {i}"));
+            asr::print_message(&format!(
+                "Found {name} at 0x{addr} with signature index {i}"
+            ));
             return addr;
         }
     }
@@ -224,7 +224,10 @@ fn scan<const N: usize>(
     offset: u32,
     next_instruction: u32,
 ) -> Result<Address, Option<Error>> {
-    let addr = signature.scan_process_range(process, (addr, len)).ok_or(None)? + offset;
+    let addr = signature
+        .scan_process_range(process, (addr, len))
+        .ok_or(None)?
+        + offset;
 
     Ok(addr + process.read::<u32>(addr)? + next_instruction)
 }
@@ -329,7 +332,7 @@ impl Memory {
                 Signature::<33>::new("B2 01 89 05 ?? ?? ?? ?? E8 ?? ?? ?? ?? C7 05 ?? ?? ?? ?? 03 00 00 00 C7 05 ?? ?? ?? ?? 02 00 00 00"),
                 p, mr, 0xF, 0x8
             )
-        },];
+        }];
 
         Ok(Memory {
             namedata_addr: find_addr_or_panic("namedata", process, module_range, namedata_sigs),

@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "dismantled",
+    "doom_the_dark_ages",
     "helpers",
+    "idtech",
     "kuru-kuru-kururin",
     "selaco",
     "snap_the_sentinel",
