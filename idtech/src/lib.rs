@@ -2,17 +2,16 @@ mod typeinfo;
 
 use std::error::Error;
 use std::rc::Rc;
-use std::time::Duration;
 
+use crate::typeinfo::class::ClassTypeInfo;
 use asr::{signature::Signature, Address, Process};
-use bytemuck::CheckedBitPattern;
 use helpers::error::SimpleError;
 use typeinfo::*;
 
 pub struct IdTech<'a> {
     process: &'a Process,
-    pub memory: Rc<Memory>,
-    pub type_info: Rc<TypeInfoTools<'a>>,
+    memory: Rc<Memory>,
+    type_info: Rc<TypeInfoTools<'a>>,
 }
 
 impl<'a> IdTech<'a> {
@@ -45,6 +44,37 @@ impl<'a> IdTech<'a> {
         };
 
         Ok(idtech)
+    }
+
+    pub fn get_offset(
+        &self,
+        project_name: &str,
+        class_name: &str,
+        variable_name: &str,
+    ) -> Result<u64, Box<dyn Error>> {
+        let class = self.get_class(project_name, class_name)?;
+        Ok(class.get_variable(variable_name)?.get_offset()?.clone())
+    }
+
+    pub fn get_class(
+        &self,
+        project_name: &str,
+        class_name: &str,
+    ) -> Result<&ClassTypeInfo<'a>, Box<dyn Error>> {
+        let project = self
+            .type_info
+            .get_project(project_name)
+            .ok_or(SimpleError::from(&format!(
+                "failed to find project {project_name}"
+            )))?;
+
+        let class = project
+            .get_class(class_name)
+            .ok_or(SimpleError::from(&format!(
+                "failed to find class {class_name} in project {project_name}"
+            )))?;
+
+        Ok(class)
     }
 
     // pub fn invalidate_cache(&mut self) -> Result<(), Error> {

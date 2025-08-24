@@ -114,9 +114,10 @@ name = "doom_the_dark_ages"
 version = "0.1.0"
 dependencies = [
  "asr 0.1.0 (git+https://github.com/LiveSplit/asr)",
+ "bytemuck",
  "helpers",
  "idtech",
- "paste",
+ "once_cell",
 ]
 
 [[package]]
@@ -130,6 +131,8 @@ name = "helpers"
 version = "0.1.0"
 dependencies = [
  "asr 0.1.0 (git+https://github.com/LiveSplit/asr)",
+ "bytemuck",
+ "once_cell",
  "paste",
 ]
 

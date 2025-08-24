@@ -13,13 +13,10 @@ where
     let result = loop {
         let result = load_fn().await;
 
-        if result.is_ok() {
-            break result.unwrap();
-        }
-
-        // SAFETY: we just checked it's an error above
-        //   (this is to avoid the Debug constraint)
-        let error = unsafe { result.unwrap_err_unchecked() };
+        let error = match result {
+            Ok(result) => break result,
+            Err(e) => e,
+        };
 
         asr::print_message(&format!(
             "=> try_load unsuccessful, trying again in {}ms! with error: {}",

@@ -1,8 +1,9 @@
-pub mod error;
-pub mod try_load;
-
 extern crate core;
 extern crate proc_macro;
+pub mod error;
+pub mod memory;
+pub mod pointer;
+pub mod try_load;
 
 use asr::{print_message, settings, timer};
 pub use paste::paste;
