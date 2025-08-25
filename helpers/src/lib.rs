@@ -3,11 +3,14 @@ extern crate proc_macro;
 pub mod error;
 pub mod memory;
 pub mod pointer;
+pub mod settings;
 pub mod try_load;
 
-use asr::{print_message, settings, timer};
+use crate::error::SimpleError;
+use asr::{print_message, timer};
 pub use paste::paste;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
 
 #[macro_export]
 macro_rules! impl_auto_splitter_state {
@@ -49,9 +52,62 @@ macro_rules! impl_auto_splitter_state {
     };
 }
 
+pub fn get_setting(
+    key: &str,
+    setting_defaults: &HashMap<String, bool>,
+) -> Result<bool, Box<dyn Error>> {
+    let settings_map = asr::settings::Map::load();
+
+    if let Some(value) = settings_map.get(key) {
+        return value.get_bool().ok_or(
+            SimpleError::from(&format!("stored value for setting {} not a bool", key)).into(),
+        );
+    }
+
+    if let Some(default_value) = setting_defaults.get(key) {
+        print_message(&format!(
+            "-> using default value for {key} of {default_value}"
+        ));
+        return Ok(default_value.clone());
+    }
+
+    Err(SimpleError::from(&format!(
+        "attempted to read value for unknown setting {key}"
+    ))
+    .into())
+}
+
+pub fn better_split(
+    key: &String,
+    setting_defaults: &HashMap<String, bool>,
+    completed_splits: &mut HashSet<String>,
+) -> Result<bool, Box<dyn Error>> {
+    print_message(&format!("trying to split {key}"));
+    if completed_splits.contains(key) {
+        print_message(&format!("-> {key} already split"));
+        return Ok(false);
+    }
+
+    let value = get_setting(key, setting_defaults)?;
+    if !value {
+        print_message(&format!("-> {key} set to false"));
+        return Ok(false);
+    }
+
+    if !completed_splits.insert(key.to_owned()) {
+        print_message(&format!("-> {key} already split"));
+        return Ok(false);
+    }
+
+    print_message(&format!("-> {key} split!"));
+    timer::split();
+
+    Ok(true)
+}
+
 pub fn split(key: &String, completed_splits: &mut HashSet<String>) -> bool {
     print_message(&format!("trying to split {key}"));
-    let settings_map = settings::Map::load();
+    let settings_map = asr::settings::Map::load();
 
     if completed_splits.contains(key) {
         print_message(&format!("-> {key} already split"));

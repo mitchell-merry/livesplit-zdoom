@@ -1,0 +1,54 @@
+[
+    BoolSetting (
+        key: "il_mode",
+        description: "Individual Level Mode",
+        tooltip: Some("Start time on time start on any level.")
+    ),
+    BoolSetting (
+        key: "igt_mode",
+        description: "In-Game Time Mode",
+        tooltip: Some("Use in-game time instead of real time.")
+    ),
+    TitleSetting (
+        key: "_split_level_completion",
+        description: "Split on completing levels",
+        tooltip: Some("You can leave all of these checked, probably."),
+        subsettings: Some([
+            BoolSetting ( key: "_level_0_0", description: "Training 1", default: Some(true) ),
+            BoolSetting ( key: "_level_0_1", description: "Training 2", default: Some(true) ),
+            BoolSetting ( key: "_level_0_2", description: "Training 3", default: Some(true) ),
+            BoolSetting ( key: "_level_0_3", description: "Training 4", default: Some(true) ),
+            BoolSetting ( key: "_level_0_4", description: "Training 5", default: Some(true) ),
+            BoolSetting ( key: "_level_1_0", description: "Grasslands 1", default: Some(true) ),
+            BoolSetting ( key: "_level_1_1", description: "Grasslands 2", default: Some(true) ),
+            BoolSetting ( key: "_level_1_2", description: "Grasslands 3", default: Some(true) ),
+            BoolSetting ( key: "_level_2_0", description: "Ocean 1", default: Some(true) ),
+            BoolSetting ( key: "_level_2_1", description: "Ocean 2", default: Some(true) ),
+            BoolSetting ( key: "_level_2_2", description: "Ocean 3", default: Some(true) ),
+            BoolSetting ( key: "_level_3_0", description: "Jungle 1", default: Some(true) ),
+            BoolSetting ( key: "_level_3_1", description: "Jungle 2", default: Some(true) ),
+            BoolSetting ( key: "_level_3_2", description: "Jungle 3", default: Some(true) ),
+            BoolSetting ( key: "_level_4_0", description: "Cake Land 1", default: Some(true) ),
+            BoolSetting ( key: "_level_4_1", description: "Cake Land 2", default: Some(true) ),
+            BoolSetting ( key: "_level_4_2", description: "Cake Land 3", default: Some(true) ),
+            BoolSetting ( key: "_level_5_0", description: "Cave 1", default: Some(true) ),
+            BoolSetting ( key: "_level_5_1", description: "Cave 2", default: Some(true) ),
+            BoolSetting ( key: "_level_5_2", description: "Cave 3", default: Some(true) ),
+            BoolSetting ( key: "_level_6_0", description: "Cloud Land 1", default: Some(true) ),
+            BoolSetting ( key: "_level_6_1", description: "Cloud Land 2", default: Some(true) ),
+            BoolSetting ( key: "_level_6_2", description: "Cloud Land 3", default: Some(true) ),
+            BoolSetting ( key: "_level_7_0", description: "Star Land 1", default: Some(true) ),
+            BoolSetting ( key: "_level_7_1", description: "Star Land 2", default: Some(true) ),
+            BoolSetting ( key: "_level_7_2", description: "Star Land 3", default: Some(true) ),
+            BoolSetting ( key: "_level_8_0", description: "Ice Land 1", default: Some(true) ),
+            BoolSetting ( key: "_level_8_1", description: "Ice Land 2", default: Some(true) ),
+            BoolSetting ( key: "_level_8_2", description: "Ice Land 3", default: Some(true) ),
+            BoolSetting ( key: "_level_9_0", description: "Machine Land 1", default: Some(true) ),
+            BoolSetting ( key: "_level_9_1", description: "Machine Land 2", default: Some(true) ),
+            BoolSetting ( key: "_level_9_2", description: "Machine Land 3", default: Some(true) ),
+            BoolSetting ( key: "_level_10_0", description: "Ghost Castle 1", default: Some(true) ),
+            BoolSetting ( key: "_level_10_1", description: "Ghost Castle 2", default: Some(true) ),
+            BoolSetting ( key: "_level_10_2", description: "Ghost Castle 3", default: Some(true) )
+        ])
+    )
+]
