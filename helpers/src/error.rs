@@ -1,9 +1,15 @@
 use std::fmt;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub struct SimpleError {
     message: String,
+}
+
+impl SimpleError {
+    pub fn wrap<T: Display>(message: T, child: Box<dyn std::error::Error>) -> SimpleError {
+        SimpleError::from(&format!("{}: {}", message, child))
+    }
 }
 
 impl std::error::Error for SimpleError {}

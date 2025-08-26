@@ -65,9 +65,6 @@ pub fn get_setting(
     }
 
     if let Some(default_value) = setting_defaults.get(key) {
-        print_message(&format!(
-            "-> using default value for {key} of {default_value}"
-        ));
         return Ok(default_value.clone());
     }
 

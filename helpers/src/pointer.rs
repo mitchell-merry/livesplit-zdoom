@@ -5,7 +5,7 @@ use asr::{Address, PointerSize, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::iter::once;
 
 pub trait Readable {
@@ -45,6 +45,7 @@ impl<'a> Readable for Emulator {
 }
 
 pub struct PointerPath<'a, R: Readable + ?Sized> {
+    name: Option<String>,
     readable: &'a R,
     base_address: Address,
     path: Vec<u64>,
@@ -54,6 +55,7 @@ pub struct PointerPath<'a, R: Readable + ?Sized> {
 impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
     pub fn new(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
         PointerPath {
+            name: None,
             readable,
             pointer_size: PointerSize::Bit64,
             base_address,
@@ -63,10 +65,21 @@ impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
 
     pub fn new32(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
         PointerPath {
+            name: None,
             readable,
             pointer_size: PointerSize::Bit32,
             base_address,
             path: path.into(),
+        }
+    }
+
+    pub fn named<T: Into<String>>(&self, name: T) -> Self {
+        PointerPath {
+            name: Some(name.into()),
+            readable: self.readable,
+            pointer_size: self.pointer_size,
+            base_address: self.base_address,
+            path: self.path.clone(),
         }
     }
 
@@ -81,6 +94,7 @@ impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
         let new_middle_offset = original_last + child_prefix;
 
         PointerPath {
+            name: None,
             readable: self.readable,
             pointer_size: self.pointer_size,
             base_address: self.base_address,
@@ -103,11 +117,18 @@ impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
     pub fn read<T: CheckedBitPattern>(&self) -> Result<T, Box<dyn Error>> {
         self.readable
             .read_pointer_path(self.base_address, self.pointer_size, &self.path)
+            .map_err(|e| {
+                let pointer_name = self
+                    .name
+                    .clone()
+                    .unwrap_or(String::from("unnamed pointer path"));
+                SimpleError::wrap(&format!("error while reading {pointer_name}"), e).into()
+            })
     }
 }
 
 pub trait Invalidatable {
-    fn next_tick(&mut self);
+    fn invalidate(&mut self);
 }
 
 pub struct MemoryWatcher<'a, R: Readable + ?Sized, T: CheckedBitPattern> {
@@ -154,7 +175,7 @@ impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug + Clone>
 }
 
 impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> Invalidatable for MemoryWatcher<'a, R, T> {
-    fn next_tick(&mut self) {
+    fn invalidate(&mut self) {
         self.old = self.current.get().copied();
         self.current = OnceCell::new();
     }
