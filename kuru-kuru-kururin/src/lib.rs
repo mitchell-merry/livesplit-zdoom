@@ -114,14 +114,14 @@ async fn on_attach(
 ) -> Result<(), Box<dyn Error>> {
     asr::print_message("Attached!");
 
-    set_variable(
-        "ram base (ewram)",
-        &format!("0x{}", emulator.ram_base.get().unwrap().get(0).unwrap()),
-    );
-    set_variable(
-        "ram base (iwram)",
-        &format!("0x{}", emulator.ram_base.get().unwrap().get(1).unwrap()),
-    );
+    // set_variable(
+    //     "ram base (ewram)",
+    //     &format!("0x{}", emulator.ram_base.get().unwrap().get(0).unwrap()),
+    // );
+    // set_variable(
+    //     "ram base (iwram)",
+    //     &format!("0x{}", emulator.ram_base.get().unwrap().get(1).unwrap()),
+    // );
 
     let mut watchers = Watchers::init(emulator);
     let mut completed_splits = HashSet::new();

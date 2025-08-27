@@ -123,7 +123,7 @@ dependencies = [
 name = "doom_the_dark_ages"
 version = "0.1.0"
 dependencies = [
- "asr 0.1.0 (git+https://github.com/LiveSplit/asr)",
+ "asr 0.1.0",
  "bytemuck",
  "helpers",
  "idtech",
@@ -152,7 +152,7 @@ dependencies = [
 name = "idtech"
 version = "0.1.0"
 dependencies = [
- "asr 0.1.0 (git+https://github.com/LiveSplit/asr)",
+ "asr 0.1.0",
  "bitflags",
  "bytemuck",
  "helpers",

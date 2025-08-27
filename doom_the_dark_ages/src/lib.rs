@@ -65,7 +65,7 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
         let vel_x = player.velocity.x.current().unwrap_or(&0f32);
 
         // Prepare for the next iteration
-        memory.next_tick();
+        memory.invalidate();
 
         next_tick().await;
     }
@@ -116,8 +116,8 @@ impl<'a> Memory<'a> {
         })
     }
 
-    pub fn next_tick(&mut self) {
-        self.state.next_tick();
-        self.player.next_tick();
+    pub fn invalidate(&mut self) {
+        self.state.invalidate();
+        self.player.invalidate();
     }
 }
