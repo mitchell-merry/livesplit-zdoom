@@ -38,9 +38,10 @@ async fn main() {
         let emulator = Emulator::wait_attach().await;
         emulator
             .until_closes(async {
-                on_attach(&emulator, &settings_defaults)
-                    .await
-                    .expect("problem");
+                let x = on_attach(&emulator, &settings_defaults).await;
+                if let Err(e) = x {
+                    asr::print_message(&format!("{}", e));
+                }
             })
             .await;
     }
@@ -95,12 +96,12 @@ fn flag_just_enabled(
     flags_watcher: &MemoryWatcher<Emulator, GameFlags>,
     flag: GameFlags,
 ) -> Result<bool, Box<dyn Error>> {
-    let old = match flags_watcher.old_owned() {
+    let old = match flags_watcher.old() {
         Some(x) => x,
         None => return Ok(false),
     };
 
-    let current = match flags_watcher.current_owned() {
+    let current = match flags_watcher.current() {
         Ok(x) => x,
         Err(e) => return Err(e),
     };
@@ -127,24 +128,23 @@ async fn on_attach(
     let mut completed_splits = HashSet::new();
 
     while emulator.is_open() {
-        set_variable(
-            "time (frames)",
-            &format!("{}", watchers.time.current_owned()?),
-        );
+        next_tick().await;
+        watchers.invalidate();
 
-        let flags = watchers.flags.current_owned()?;
+        set_variable("time (frames)", &format!("{}", watchers.time.current()?));
+
+        let flags = watchers.flags.current()?;
         set_variable("flags", &format!("{:08x}", flags.bits()));
         set_variable("flags (interpreted)", &format!("{:?}", flags));
 
-        set_variable("world", &format!("{}", watchers.world.current_owned()?));
-        set_variable(
-            "sub level",
-            &format!("{:?}", watchers.sub_level.current_owned()?),
-        );
+        set_variable("world", &format!("{}", watchers.world.current()?));
+        set_variable("sub level", &format!("{:?}", watchers.sub_level.current()?));
         set_variable(
             "current mode",
-            &format!("{:?}", watchers.game_mode.current_owned()?),
+            &format!("{:?}", watchers.game_mode.current()?),
         );
+
+        set_variable("input", &format!("{:?}", watchers.input_flags.current()?));
 
         if state() == TimerState::NotRunning {
             completed_splits.clear();
@@ -155,7 +155,7 @@ async fn on_attach(
 
         if state() == TimerState::Running {
             if get_setting("igt_mode", &settings_defaults)? {
-                set_game_time(get_in_game_time(watchers.time.current_owned()?));
+                set_game_time(get_in_game_time(watchers.time.current()?));
                 pause_game_time();
             } else {
                 resume_game_time();
@@ -166,15 +166,13 @@ async fn on_attach(
         if flag_just_enabled(&watchers.flags, GameFlags::HasFinished)? {
             let key = &format!(
                 "_level_{:?}_{}",
-                watchers.world.current_owned()?,
-                watchers.sub_level.current_owned()?
+                watchers.world.current()?,
+                watchers.sub_level.current()?
             );
             let _ = better_split(key, &settings_defaults, &mut completed_splits);
         }
-
-        watchers.invalidate();
-        next_tick().await;
     }
+
     Ok(())
 }
 
@@ -184,10 +182,10 @@ fn should_start(
 ) -> Result<bool, Box<dyn Error>> {
     if watchers
         .game_mode
-        .old_owned()
+        .old()
         .is_some_and(|m| m == GameMode::None)
-        && (watchers.game_mode.current_owned()? == GameMode::Normal
-            || watchers.game_mode.current_owned()? == GameMode::Easy)
+        && (watchers.game_mode.current()? == GameMode::Normal
+            || watchers.game_mode.current()? == GameMode::Easy)
     {
         return Ok(true);
     }

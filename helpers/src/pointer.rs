@@ -5,7 +5,6 @@ use asr::{Address, PointerSize, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 use std::error::Error;
-use std::fmt::{Debug, Display};
 use std::iter::once;
 
 pub trait Readable {
@@ -53,33 +52,41 @@ pub struct PointerPath<'a, R: Readable + ?Sized> {
 }
 
 impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
-    pub fn new(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
+    pub fn new(
+        readable: &'a R,
+        base_address: impl Into<Address>,
+        path: impl Into<Vec<u64>>,
+    ) -> Self {
         PointerPath {
             name: None,
             readable,
             pointer_size: PointerSize::Bit64,
-            base_address,
+            base_address: base_address.into(),
             path: path.into(),
         }
     }
 
-    pub fn new32(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
+    pub fn new32(
+        readable: &'a R,
+        base_address: impl Into<Address>,
+        path: impl Into<Vec<u64>>,
+    ) -> Self {
         PointerPath {
             name: None,
             readable,
             pointer_size: PointerSize::Bit32,
-            base_address,
+            base_address: base_address.into(),
             path: path.into(),
         }
     }
 
-    pub fn named<T: Into<String>>(&self, name: T) -> Self {
+    pub fn named<T: Into<String>>(self, name: T) -> Self {
         PointerPath {
             name: Some(name.into()),
             readable: self.readable,
             pointer_size: self.pointer_size,
             base_address: self.base_address,
-            path: self.path.clone(),
+            path: self.path,
         }
     }
 
@@ -115,13 +122,19 @@ impl<'a, R: Readable + ?Sized> PointerPath<'a, R> {
     }
 
     pub fn read<T: CheckedBitPattern>(&self) -> Result<T, Box<dyn Error>> {
+        let valid_path = if self.path.len() > 0 {
+            &self.path
+        } else {
+            &[0x0].into()
+        };
+
         self.readable
-            .read_pointer_path(self.base_address, self.pointer_size, &self.path)
+            .read_pointer_path(self.base_address, self.pointer_size, valid_path)
             .map_err(|e| {
-                let pointer_name = self
-                    .name
-                    .clone()
-                    .unwrap_or(String::from("unnamed pointer path"));
+                let pointer_name = self.name.clone().unwrap_or(String::from(&format!(
+                    "unnamed pointer path (0x{:?}, {:?})",
+                    self.base_address, valid_path
+                )));
                 SimpleError::wrap(&format!("error while reading {pointer_name}"), e).into()
             })
     }
@@ -135,26 +148,46 @@ pub struct MemoryWatcher<'a, R: Readable + ?Sized, T: CheckedBitPattern> {
     path: PointerPath<'a, R>,
     current: OnceCell<T>,
     old: Option<T>,
+    default: Option<T>,
 }
 
-impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug> MemoryWatcher<'a, R, T> {
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> MemoryWatcher<'a, R, T> {
     pub fn new(readable: &'a R, base_address: Address, path: impl Into<Vec<u64>>) -> Self {
-        PointerPath::new(readable, base_address, path).into()
-    }
-
-    pub fn current(&self) -> Result<&T, Box<dyn Error>> {
-        self.current.get_or_try_init(|| self.path.read())
-    }
-
-    pub fn old(&self) -> &Option<T> {
-        &self.old
-    }
-
-    pub fn changed(&self) -> Result<bool, Box<dyn Error>> {
-        match self.old {
-            None => Ok(true),
-            Some(old) => Ok(&old != self.current()?),
+        MemoryWatcher {
+            path: PointerPath::new(readable, base_address, path),
+            current: OnceCell::new(),
+            old: None,
+            default: None,
         }
+    }
+
+    pub fn default(self, default: T) -> Self {
+        MemoryWatcher {
+            path: self.path,
+            current: self.current,
+            old: self.old,
+            default: Some(default),
+        }
+    }
+
+    pub fn current(&self) -> Result<T, Box<dyn Error>> {
+        self.current
+            .get_or_try_init(|| {
+                let err = match self.path.read() {
+                    Ok(value) => return Ok(value),
+                    Err(e) => e,
+                };
+
+                return match self.default {
+                    Some(default) => Ok(default),
+                    None => Err(err),
+                };
+            })
+            .map(|x| x.clone())
+    }
+
+    pub fn old(&self) -> Option<T> {
+        self.old
     }
 
     pub fn child(&self, path: impl Into<Vec<u64>>) -> Self {
@@ -162,15 +195,12 @@ impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug> MemoryW
     }
 }
 
-impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq + Debug + Clone>
-    MemoryWatcher<'a, R, T>
-{
-    pub fn current_owned(&self) -> Result<T, Box<dyn Error>> {
-        Ok(self.current()?.to_owned())
-    }
-
-    pub fn old_owned(&self) -> Option<T> {
-        self.old.clone()
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq> MemoryWatcher<'a, R, T> {
+    pub fn changed(&self) -> Result<bool, Box<dyn Error>> {
+        match self.old {
+            None => Ok(true),
+            Some(old) => Ok(old != self.current()?),
+        }
     }
 }
 
@@ -185,10 +215,6 @@ impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> From<PointerPath<'a, R>>
     for MemoryWatcher<'a, R, T>
 {
     fn from(value: PointerPath<'a, R>) -> Self {
-        MemoryWatcher {
-            path: value,
-            current: OnceCell::new(),
-            old: None,
-        }
+        MemoryWatcher::new(value.readable, value.base_address, value.path)
     }
 }

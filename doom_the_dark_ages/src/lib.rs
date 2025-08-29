@@ -62,7 +62,7 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
         }
 
         let player = &memory.player;
-        let vel_x = player.velocity.x.current().unwrap_or(&0f32);
+        let vel_x = player.velocity.x.current().unwrap_or(0f32);
 
         // Prepare for the next iteration
         memory.invalidate();
