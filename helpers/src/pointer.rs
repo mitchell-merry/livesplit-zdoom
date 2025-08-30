@@ -5,6 +5,7 @@ use asr::{Address, PointerSize, Process};
 use bytemuck::CheckedBitPattern;
 use once_cell::unsync::OnceCell;
 use std::error::Error;
+use std::fmt::Debug;
 use std::iter::once;
 
 pub trait Readable {
@@ -161,7 +162,7 @@ impl<'a, R: Readable + ?Sized, T: CheckedBitPattern> MemoryWatcher<'a, R, T> {
         }
     }
 
-    pub fn default(self, default: T) -> Self {
+    pub fn default_given(self, default: T) -> Self {
         MemoryWatcher {
             path: self.path,
             current: self.current,
@@ -200,6 +201,17 @@ impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + PartialEq> MemoryWatcher<'
         match self.old {
             None => Ok(true),
             Some(old) => Ok(old != self.current()?),
+        }
+    }
+}
+
+impl<'a, R: Readable + ?Sized, T: CheckedBitPattern + Default> MemoryWatcher<'a, R, T> {
+    pub fn default(self) -> Self {
+        MemoryWatcher {
+            path: self.path,
+            current: self.current,
+            old: self.old,
+            default: Some(T::default()),
         }
     }
 }

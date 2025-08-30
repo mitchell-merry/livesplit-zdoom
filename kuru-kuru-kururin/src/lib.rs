@@ -77,9 +77,10 @@ bitflags! {
     }
 }
 
-#[derive(CheckedBitPattern, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(CheckedBitPattern, Clone, Copy, Default, PartialEq, Eq, Debug)]
 #[repr(u8)]
 enum GameMode {
+    #[default]
     None = 0,
     Normal = 1,
     Easy = 2,
@@ -145,6 +146,8 @@ async fn on_attach(
         );
 
         set_variable("input", &format!("{:?}", watchers.input_flags.current()?));
+        set_variable("state", &format!("{:?}", watchers.state.current()?));
+        set_variable("substate", &format!("{:?}", watchers.substate.current()?));
 
         if state() == TimerState::NotRunning {
             completed_splits.clear();

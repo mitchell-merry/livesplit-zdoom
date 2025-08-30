@@ -26,9 +26,10 @@ bitflags! {
 // no use for this atm
 // this one is available at 0x3000dca
 // there's a sub-menu at 0x3000dcb (byte)
-#[derive(CheckedBitPattern, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(CheckedBitPattern, Clone, Copy, Default, PartialEq, Eq, Debug)]
 #[repr(u8)]
-enum GameState {
+pub enum GameState {
+    #[default]
     None = 0,
     // sub-menus:
     // 0-2 initialisation / startup?
@@ -59,32 +60,47 @@ pub struct Watchers<'a> {
     pub time: MemoryWatcher<'a, Emulator, u32>,
     pub flags: MemoryWatcher<'a, Emulator, GameFlags>,
     pub input_flags: MemoryWatcher<'a, Emulator, InputFlags>,
+    pub state: MemoryWatcher<'a, Emulator, GameState>,
+    pub substate: MemoryWatcher<'a, Emulator, u8>,
 }
 
 impl<'a> Watchers<'a> {
     pub fn init(emulator: &'a Emulator) -> Self {
         let base = PointerPath::new32(emulator, 0x3004420_u64, &[]);
-        // probably some instance of
+        // some more things:
+        // 0x4 - save file slot
+
+        // probably some instance of "level"?
         let some_important_thing = base.child(&[0x18, 0x0]);
 
         let world: MemoryWatcher<_, _> = base.child(&[0x0]).named("world").into();
         let sub_level: MemoryWatcher<_, _> = base.child(&[0x1]).named("sub level").into();
         let game_mode: MemoryWatcher<_, _> = base.child(&[0x16]).named("game mode").into();
+
+        // 0x30059c0 + 0x24,0x26,0x34,0x28
+
         let time: MemoryWatcher<_, _> = some_important_thing.child(&[0xB8]).named("time").into();
         let flags: MemoryWatcher<_, _> = some_important_thing.child(&[0xBC]).named("flags").into();
+
+        let state: MemoryWatcher<_, _> = PointerPath::new32(emulator, 0x3000dca_u64, &[])
+            .named("state")
+            .into();
+        let substate: MemoryWatcher<_, _> = PointerPath::new32(emulator, 0x3000dcb_u64, &[])
+            .named("substate")
+            .into();
         let input_flags: MemoryWatcher<_, _> = PointerPath::new32(emulator, 0x3000dec_u64, &[])
             .named("buttons")
             .into();
 
         Watchers {
-            world: world.default(0),
-            sub_level: sub_level.default(0),
-            game_mode: game_mode.default(GameMode::None),
-            // some more things:
-            // 0x4 - save file slot
-            time: time.default(0),
-            flags: flags.default(GameFlags::default()),
-            input_flags: input_flags.default(InputFlags::default()),
+            world: world.default(),
+            sub_level: sub_level.default(),
+            game_mode: game_mode.default(),
+            time: time.default(),
+            flags: flags.default(),
+            input_flags: input_flags.default(),
+            state: state.default(),
+            substate: substate.default(),
         }
     }
 
