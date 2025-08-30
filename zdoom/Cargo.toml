@@ -14,7 +14,7 @@ asr = { git = "https://github.com/LiveSplit/asr", features = [
     "signature", # Scanning signatures.
     # "wasi-no-std", # Support for no_std on WASI.
 ] }
-bitflags = "2.5.0"
+bitflags = "2.9.3"
 
 # Bytemuck can be used to define structs that are being read from the game's process.
 bytemuck = { version = "1", features = ["derive", "min_const_generics"] }

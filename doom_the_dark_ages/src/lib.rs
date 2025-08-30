@@ -62,10 +62,10 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
         }
 
         let player = &memory.player;
-        let vel_x = player.velocity.x.current().unwrap_or(&0f32);
+        let vel_x = player.velocity.x.current().unwrap_or(0f32);
 
         // Prepare for the next iteration
-        memory.next_tick();
+        memory.invalidate();
 
         next_tick().await;
     }
@@ -73,7 +73,7 @@ async fn on_attach(process: &Process) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 struct Memory<'a> {
-    state: MemoryWatcher<'a, IdGameSystemLocalState>,
+    state: MemoryWatcher<'a, Process, IdGameSystemLocalState>,
     player: IdPlayer<'a>,
 }
 
@@ -95,7 +95,7 @@ impl<'a> Memory<'a> {
         //   if they don't, it's a fatal error and we shouldn't retry
 
         Ok(Memory {
-            state: MemoryWatcher::<IdGameSystemLocalState>::new(
+            state: MemoryWatcher::<_, IdGameSystemLocalState>::new(
                 process,
                 game_system_local,
                 &[idtech.get_offset("Game", "idGameSystemLocal", "state")?],
@@ -116,8 +116,8 @@ impl<'a> Memory<'a> {
         })
     }
 
-    pub fn next_tick(&mut self) {
-        self.state.next_tick();
-        self.player.next_tick();
+    pub fn invalidate(&mut self) {
+        self.state.invalidate();
+        self.player.invalidate();
     }
 }

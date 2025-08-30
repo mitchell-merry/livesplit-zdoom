@@ -1,4 +1,5 @@
 use crate::physics::IdVec3;
+use asr::Process;
 use helpers::pointer::{Invalidatable, PointerPath};
 use idtech::IdTech;
 use std::error::Error;
@@ -8,7 +9,10 @@ pub struct IdPlayer<'a> {
 }
 
 impl<'a> IdPlayer<'a> {
-    pub fn init(idtech: &IdTech<'a>, path: PointerPath<'a>) -> Result<Self, Box<dyn Error>> {
+    pub fn init(
+        idtech: &IdTech<'a>,
+        path: PointerPath<'a, Process>,
+    ) -> Result<Self, Box<dyn Error>> {
         let player_c = idtech.get_class("Game", "idPlayer")?;
         let player_physics_c = idtech.get_class("Game", "idPlayerPhysicsInfo")?;
         let player_state_c = idtech.get_class("Game", "playerPState_t")?;
@@ -27,7 +31,7 @@ impl<'a> IdPlayer<'a> {
 }
 
 impl<'a> Invalidatable for IdPlayer<'a> {
-    fn next_tick(&mut self) {
-        self.velocity.next_tick();
+    fn invalidate(&mut self) {
+        self.velocity.invalidate();
     }
 }
